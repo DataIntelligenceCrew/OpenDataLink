@@ -1,0 +1,29 @@
+#!/bin/sh
+
+# Download all datasets on Socrata.
+# Requires curl and jq.
+
+# Get a list of all Socrata domains
+curl -# 'http://api.us.socrata.com/api/catalog/v1/domains' -o domains.json
+domains=$(jq -r '.results[].domain' domains.json)
+
+for domain in $domains
+do
+    # Fetch and parse the domain's data.json
+    mkdir "$domain"
+    curl -# "$domain/data.json" -o "$domain/data.json"
+    # Change mediaType to "text/csv" to get CSV data instead
+    download_urls=$(jq -r '.dataset[].distribution[]? |
+        select(.mediaType == "application/json").downloadURL' \
+        "$domain/data.json")
+
+    # Download the datasets
+    n=0
+    for url in $download_urls
+    do
+        echo "Downloading dataset $n from $domain"
+        mkdir "$domain/$n"
+        curl -# "$url" -o "$domain/$n/data.json"
+        n=$((n+1))
+    done
+done
