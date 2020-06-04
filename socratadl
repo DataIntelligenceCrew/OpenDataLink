@@ -2,28 +2,30 @@
 
 # Download all datasets on Socrata.
 # Requires curl and jq.
+# Datasets are saved to datasets/<id>/rows.csv and the metadata is saved to
+# datasets/<id>/metadata.json where <id> is the Socrata dataset four-by-four.
 
-# Get a list of all Socrata domains
-curl -# 'http://api.us.socrata.com/api/catalog/v1/domains' -o domains.json
-domains=$(jq -r '.results[].domain' domains.json)
+if [ -d datasets ]; then
+    echo "datasets directory already exists"
+    exit 1
+fi
 
-for domain in $domains
+mkdir datasets
+cd datasets || exit 1
+
+# Limited to NYC health data for now (~120 datasets).
+discovery_api_url='http://api.us.socrata.com/api/catalog/v1?domains=data.cityofnewyork.us&categories=Health&only=datasets&limit=1000'
+
+curl -# "$discovery_api_url" -o catalog.json
+
+jq -c '.results[]' catalog.json |
+while IFS= read -r resource
 do
-    # Fetch and parse the domain's data.json
-    mkdir "$domain"
-    curl -# "$domain/data.json" -o "$domain/data.json"
-    # Change mediaType to "text/csv" to get CSV data instead
-    download_urls=$(jq -r '.dataset[].distribution[]? |
-        select(.mediaType == "application/json").downloadURL' \
-        "$domain/data.json")
-
-    # Download the datasets
-    n=0
-    for url in $download_urls
-    do
-        echo "Downloading dataset $n from $domain"
-        mkdir "$domain/$n"
-        curl -# "$url" -o "$domain/$n/data.json"
-        n=$((n+1))
-    done
+    id=$(echo "$resource" | jq -r '.resource.id')
+    echo "Downloading dataset $id"
+    mkdir "$id"
+    echo "$resource" | jq > "$id/metadata.json"
+    domain=$(echo "$resource" | jq -r '.metadata.domain')
+    download_url="$domain/api/views/$id/rows.csv?accessType=DOWNLOAD"
+    curl -# "$download_url" -o "$id/rows.csv"
 done
