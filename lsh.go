@@ -1,10 +1,11 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"github.com/ekzhu/lshensemble"
+	"os"
 	"sort"
-	//"encoding/csv"
 )
 
 type DomainKey struct {
@@ -13,35 +14,31 @@ type DomainKey struct {
 }
 
 func main() {
-	//csvfile, err := os.Open("")
-
 	var domains []map[string]bool
 	// Each key corresponds to the domain at the same index
 	var keys []DomainKey
 
-	// Obtain domains and keys
-	domains = append(domains, map[string]bool{
-		"Bath":     true,
-		"New York": true,
-		"Boston":   true,
-	})
-	keys = append(keys, DomainKey{"dataset1", "city"})
+	csvfile, err := os.Open("domains.csv")
+	if err != nil {
+		panic(err)
+	}
+	r := csv.NewReader(csvfile)
 
-	domains = append(domains, map[string]bool{
-		"Bath":      true,
-		"New York":  true,
-		"London":    true,
-		"Liverpool": true,
-		"Boston":    true,
-	})
-	keys = append(keys, DomainKey{"dataset2", "city"})
+	records, err := r.ReadAll()
+	if err != nil {
+		panic(err)
+	}
 
-	domains = append(domains, map[string]bool{
-		"Apple":  true,
-		"Orange": true,
-		"Pear":   true,
-	})
-	keys = append(keys, DomainKey{"dataset3", "fruit"})
+	for row, record := range records {
+		for col, field := range record {
+			if row == 0 {
+				keys = append(keys, DomainKey{"domains", field})
+				domains = append(domains, make(map[string]bool))
+			} else {
+				domains[col][field] = true
+			}
+		}
+	}
 
 	// Initialize the domain records to hold the minhash signatures
 	domainRecords := make([]*lshensemble.DomainRecord, len(domains))
@@ -93,7 +90,8 @@ func main() {
 	defer close(done) // Important!!
 	results := index.Query(querySig, querySize, threshold, done)
 
-	// It seems query domain is included in results
+	fmt.Println()
+	// Query domain is included in results
 	for key := range results {
 		// ...
 		// You may want to include a post-processing step here to remove
@@ -102,4 +100,7 @@ func main() {
 		// You can call break here to stop processing results.
 		fmt.Println(key)
 	}
+
+	// TODO:
+	// Keyword search with command line arguments.
 }
