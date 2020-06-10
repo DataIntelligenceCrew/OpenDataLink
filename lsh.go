@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/csv"
 	"fmt"
 	"github.com/ekzhu/lshensemble"
@@ -14,6 +15,21 @@ type DomainKey struct {
 }
 
 func main() {
+	// Read query domain from stdin
+
+	queryDomain := make(map[string]bool)
+
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		queryDomain[scanner.Text()] = true
+	}
+
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
+
+	// Read indexed domains from dataset files
+
 	var domains []map[string]bool
 	// Each key corresponds to the domain at the same index
 	var keys []DomainKey
@@ -78,8 +94,11 @@ func main() {
 	}
 
 	// Query
-	querySig := domainRecords[0].Signature
-	querySize := domainRecords[0].Size
+
+	queryMh := lshensemble.NewMinhash(seed, numHash)
+	for v := range queryDomain {
+		queryMh.Push([]byte(v))
+	}
 
 	// Containment threshold
 	threshold := 0.5
@@ -88,10 +107,9 @@ func main() {
 	// through a channel with option to cancel early.
 	done := make(chan struct{})
 	defer close(done) // Important!!
-	results := index.Query(querySig, querySize, threshold, done)
-
+	results := index.Query(queryMh.Signature(), len(queryDomain), threshold, done)
 	fmt.Println()
-	// Query domain is included in results
+
 	for key := range results {
 		// ...
 		// You may want to include a post-processing step here to remove
