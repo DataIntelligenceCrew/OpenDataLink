@@ -1,63 +1,97 @@
 package main
 
 import (
-	"bufio"
 	"encoding/csv"
 	"fmt"
 	"github.com/ekzhu/lshensemble"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sort"
+	"strconv"
 )
 
-type DomainKey struct {
-	DatasetID string
-	Attribute string
+type domainKey struct {
+	datasetID string
+	attribute string
 }
 
-func main() {
-	// Read query domain from stdin
+type domain struct {
+	values map[string]bool
+	key    domainKey
+}
 
-	queryDomain := make(map[string]bool)
-
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		queryDomain[scanner.Text()] = true
-	}
-
-	if err := scanner.Err(); err != nil {
-		panic(err)
-	}
-
-	// Read indexed domains from dataset files
-
-	var domains []map[string]bool
-	// Each key corresponds to the domain at the same index
-	var keys []DomainKey
-
-	csvfile, err := os.Open("domains.csv")
-	if err != nil {
-		panic(err)
-	}
-	r := csv.NewReader(csvfile)
+// Reads domains from a CSV file and appends them to a slice.
+func domainsFromCSV(domains []domain, f *os.File, datasetID string) []domain {
+	r := csv.NewReader(f)
 
 	records, err := r.ReadAll()
 	if err != nil {
 		panic(err)
 	}
 
-	for row, record := range records {
-		for col, field := range record {
-			if row == 0 {
-				keys = append(keys, DomainKey{"domains", field})
-				domains = append(domains, make(map[string]bool))
-			} else {
-				domains[col][field] = true
-			}
+	for col := 0; col < r.FieldsPerRecord; col++ {
+		values := make(map[string]bool)
+		key := domainKey{datasetID, strconv.Itoa(col)}
+		fmt.Println("read domain", key)
+
+		for _, record := range records {
+			v := record[col]
+			values[v] = true
+		}
+		domains = append(domains, domain{values, key})
+	}
+	return domains
+}
+
+// Reads domains from a dataset directory.
+func readDomains(dir string) []domain {
+	var domains []domain
+
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		panic(err)
+	}
+	for _, file := range files {
+		datasetDir := file.Name()
+		csvfile, err := os.Open(filepath.Join(dir, datasetDir, "rows.csv"))
+		if err != nil {
+			panic(err)
+		}
+		domains = domainsFromCSV(domains, csvfile, datasetDir)
+		csvfile.Close()
+	}
+	return domains
+}
+
+func minhashDomains(domains []domain, seed int64, numHash int) []*lshensemble.DomainRecord {
+	domainRecords := make([]*lshensemble.DomainRecord, len(domains))
+
+	for i, domain := range domains {
+		mh := lshensemble.NewMinhash(seed, numHash)
+		for v := range domain.values {
+			mh.Push([]byte(v))
+		}
+		domainRecords[i] = &lshensemble.DomainRecord{
+			Key:       domain.key,
+			Size:      len(domain.values),
+			Signature: mh.Signature(),
 		}
 	}
+	return domainRecords
+}
 
-	// Initialize the domain records to hold the minhash signatures
-	domainRecords := make([]*lshensemble.DomainRecord, len(domains))
+func main() {
+	// Read query dataset from stdin
+
+	var queryDomains []domain
+	queryDomains = domainsFromCSV(queryDomains, os.Stdin, "query")
+
+	// Read indexed datasets from files
+
+	domains := readDomains("datasets")
+
+	// Minhash the domains
 
 	// Minhash seed
 	seed := int64(42)
@@ -65,60 +99,41 @@ func main() {
 	numHash := 256
 
 	// Create the domain records with the signatures
-	for i := range domains {
-		mh := lshensemble.NewMinhash(seed, numHash)
-		for v := range domains[i] {
-			mh.Push([]byte(v))
-		}
-		domainRecords[i] = &lshensemble.DomainRecord{
-			Key:       keys[i],
-			Size:      len(domains[i]),
-			Signature: mh.Signature(),
-		}
-	}
+	domainRecords := minhashDomains(domains, seed, numHash)
+	queries := minhashDomains(queryDomains, seed, numHash)
+
+	// Build LSH Ensemble index
 
 	sort.Sort(lshensemble.BySize(domainRecords))
 
-	// Set the number of partitions
+	// Number of partitions
 	numPart := 8
-	// Set the maximum value for the minhash LSH parameter K
+	// Maximum value for the minhash LSH parameter K
 	// (number of hash functions per band).
 	maxK := 4
 
 	// Create index using equi-depth partitioning
-	// You can also use BootstrapLshEnsemblePlusEquiDepth for better accuracy
 	index, err := lshensemble.BootstrapLshEnsembleEquiDepth(
 		numPart, numHash, maxK, len(domainRecords), lshensemble.Recs2Chan(domainRecords))
 	if err != nil {
 		panic(err)
 	}
 
-	// Query
-
-	queryMh := lshensemble.NewMinhash(seed, numHash)
-	for v := range queryDomain {
-		queryMh.Push([]byte(v))
-	}
+	// Run a query for each domain in the query dataset
 
 	// Containment threshold
 	threshold := 0.5
 
-	// Get the keys of the candidate domains (may contain false positives)
-	// through a channel with option to cancel early.
-	done := make(chan struct{})
-	defer close(done) // Important!!
-	results := index.Query(queryMh.Signature(), len(queryDomain), threshold, done)
-	fmt.Println()
+	for _, query := range queries {
+		// Get the keys of the candidate domains (may contain false positives)
+		// through a channel with option to cancel early.
+		done := make(chan struct{})
+		defer close(done)
+		results := index.Query(query.Signature, query.Size, threshold, done)
 
-	for key := range results {
-		// ...
-		// You may want to include a post-processing step here to remove
-		// false positive domains using the actual domain values.
-		// ...
-		// You can call break here to stop processing results.
-		fmt.Println(key)
+		for key := range results {
+			// TODO: Check the containment
+			fmt.Println(key, "can be joined with", query.Key)
+		}
 	}
-
-	// TODO:
-	// Keyword search with command line arguments.
 }
