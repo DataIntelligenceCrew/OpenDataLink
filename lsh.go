@@ -21,86 +21,95 @@ type domain struct {
 	key    domainKey
 }
 
-// Reads domains from a CSV file and appends them to a slice.
-func domainsFromCSV(domains []domain, f *os.File, datasetID string) []domain {
+// Returns a channel of domains read from a CSV file.
+func domainsFromCSV(f *os.File, datasetID string) chan domain {
+	out := make(chan domain)
 	r := csv.NewReader(f)
 
 	records, err := r.ReadAll()
 	if err != nil {
 		panic(err)
 	}
+	go func() {
+		for col := 0; col < r.FieldsPerRecord; col++ {
+			values := make(map[string]bool)
+			key := domainKey{datasetID, strconv.Itoa(col)}
 
-	for col := 0; col < r.FieldsPerRecord; col++ {
-		values := make(map[string]bool)
-		key := domainKey{datasetID, strconv.Itoa(col)}
-		fmt.Println("read domain", key)
-
-		for _, record := range records {
-			v := record[col]
-			values[v] = true
+			for _, record := range records {
+				v := record[col]
+				values[v] = true
+			}
+			out <- domain{values, key}
 		}
-		domains = append(domains, domain{values, key})
-	}
-	return domains
+		close(out)
+	}()
+	return out
 }
 
-// Reads domains from a dataset directory.
-func readDomains(dir string) []domain {
-	var domains []domain
+// Returns a channel of domains read from a dataset directory.
+func readDomains(dir string) chan domain {
+	out := make(chan domain)
 
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		panic(err)
 	}
-	for _, file := range files {
-		datasetDir := file.Name()
-		csvfile, err := os.Open(filepath.Join(dir, datasetDir, "rows.csv"))
-		if err != nil {
-			panic(err)
+	go func() {
+		for _, file := range files {
+			if !file.IsDir() {
+				continue
+			}
+			datasetDir := file.Name()
+			csvfile, err := os.Open(filepath.Join(dir, datasetDir, "rows.csv"))
+			if err != nil {
+				panic(err)
+			}
+			for domain := range domainsFromCSV(csvfile, datasetDir) {
+				out <- domain
+			}
+			csvfile.Close()
 		}
-		domains = domainsFromCSV(domains, csvfile, datasetDir)
-		csvfile.Close()
-	}
-	return domains
+		close(out)
+	}()
+	return out
 }
 
-func minhashDomains(domains []domain, seed int64, numHash int) []*lshensemble.DomainRecord {
-	domainRecords := make([]*lshensemble.DomainRecord, len(domains))
-
-	for i, domain := range domains {
-		mh := lshensemble.NewMinhash(seed, numHash)
-		for v := range domain.values {
-			mh.Push([]byte(v))
-		}
-		domainRecords[i] = &lshensemble.DomainRecord{
-			Key:       domain.key,
-			Size:      len(domain.values),
-			Signature: mh.Signature(),
-		}
+func minhashDomain(domain domain, seed int64, numHash int) *lshensemble.DomainRecord {
+	mh := lshensemble.NewMinhash(seed, numHash)
+	for v := range domain.values {
+		mh.Push([]byte(v))
 	}
-	return domainRecords
+	return &lshensemble.DomainRecord{
+		Key:       domain.key,
+		Size:      len(domain.values),
+		Signature: mh.Signature(),
+	}
 }
 
 func main() {
-	// Read query dataset from stdin
-
-	var queryDomains []domain
-	queryDomains = domainsFromCSV(queryDomains, os.Stdin, "query")
-
-	// Read indexed datasets from files
-
-	domains := readDomains("datasets")
-
-	// Minhash the domains
+	// Read and minhash indexed and query domains
 
 	// Minhash seed
 	seed := int64(42)
 	// Number of hash functions
 	numHash := 256
 
-	// Create the domain records with the signatures
-	domainRecords := minhashDomains(domains, seed, numHash)
-	queries := minhashDomains(queryDomains, seed, numHash)
+	var domainRecords []*lshensemble.DomainRecord
+
+	for domain := range readDomains("datasets") {
+		rec := minhashDomain(domain, seed, numHash)
+		domainRecords = append(domainRecords, rec)
+		fmt.Println("minhashed", rec.Key)
+	}
+
+	var queries []*lshensemble.DomainRecord
+
+	for domain := range domainsFromCSV(os.Stdin, "query") {
+		rec := minhashDomain(domain, seed, numHash)
+		queries = append(queries, rec)
+		fmt.Println("minhashed", rec.Key)
+	}
+
 
 	// Build LSH Ensemble index
 
@@ -118,6 +127,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 
 	// Run a query for each domain in the query dataset
 
