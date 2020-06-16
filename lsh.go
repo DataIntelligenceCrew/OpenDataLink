@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 )
@@ -86,6 +87,17 @@ func minhashDomain(domain domain, seed int64, numHash int) *lshensemble.DomainRe
 	}
 }
 
+func memStats() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	fmt.Fprintln(
+		os.Stderr,
+		"Alloc:", m.Alloc/1024,
+		"TotalAlloc:", m.TotalAlloc/1024,
+		"Sys:", m.Sys/1024,
+		"Mallocs:", m.Mallocs)
+}
+
 func main() {
 	// Read and minhash indexed and query domains
 
@@ -110,6 +122,7 @@ func main() {
 		fmt.Println("minhashed", rec.Key)
 	}
 
+	memStats()
 
 	// Build LSH Ensemble index
 
@@ -128,6 +141,7 @@ func main() {
 		panic(err)
 	}
 
+	memStats()
 
 	// Run a query for each domain in the query dataset
 
@@ -146,4 +160,6 @@ func main() {
 			fmt.Println(key, "can be joined with", query.Key)
 		}
 	}
+
+	memStats()
 }
