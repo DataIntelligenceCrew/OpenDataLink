@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/ekzhu/lshensemble"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -26,20 +27,30 @@ type domain struct {
 func domainsFromCSV(f *os.File, datasetID string) chan domain {
 	out := make(chan domain)
 	r := csv.NewReader(f)
+	r.ReuseRecord = true
 
-	records, err := r.ReadAll()
-	if err != nil {
-		panic(err)
-	}
 	go func() {
-		for col := 0; col < r.FieldsPerRecord; col++ {
-			values := make(map[string]bool)
-			key := domainKey{datasetID, strconv.Itoa(col)}
-
-			for _, record := range records {
-				v := record[col]
-				values[v] = true
+		var domainVals []map[string]bool
+		for {
+			record, err := r.Read()
+			if err == io.EOF {
+				break
 			}
+			if err != nil {
+				panic(err)
+			}
+			if domainVals == nil {
+				domainVals = make([]map[string]bool, len(record))
+				for i := range domainVals {
+					domainVals[i] = make(map[string]bool)
+				}
+			}
+			for col, val := range record {
+				domainVals[col][val] = true
+			}
+		}
+		for i, values := range domainVals {
+			key := domainKey{datasetID, strconv.Itoa(i)}
 			out <- domain{values, key}
 		}
 		close(out)
