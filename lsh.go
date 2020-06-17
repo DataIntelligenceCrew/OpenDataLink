@@ -3,12 +3,13 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
+	"github.com/axiomhq/hyperloglog"
 	"github.com/ekzhu/lshensemble"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
+	"runtime/pprof"
 	"sort"
 	"strconv"
 )
@@ -18,98 +19,61 @@ type domainKey struct {
 	attribute string
 }
 
-type domain struct {
-	values map[string]bool
-	key    domainKey
+type columnSketch struct {
+	minhash     *lshensemble.Minhash
+	hyperloglog *hyperloglog.Sketch
 }
 
-// Returns a channel of domains read from a CSV file.
-func domainsFromCSV(f *os.File, datasetID string) chan domain {
-	out := make(chan domain)
+func sketchDataset(f *os.File, datasetID string, mhSeed int64, mhSize int) []*lshensemble.DomainRecord {
+	var domainRecords []*lshensemble.DomainRecord
+	var columnSketches []*columnSketch
+
 	r := csv.NewReader(f)
 	r.ReuseRecord = true
 
-	go func() {
-		var domainVals []map[string]bool
-		for {
-			record, err := r.Read()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				panic(err)
-			}
-			if domainVals == nil {
-				domainVals = make([]map[string]bool, len(record))
-				for i := range domainVals {
-					domainVals[i] = make(map[string]bool)
+	for {
+		record, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			panic(err)
+		}
+		if columnSketches == nil {
+			columnSketches = make([]*columnSketch, len(record))
+
+			for i := range columnSketches {
+				columnSketches[i] = &columnSketch{
+					minhash:     lshensemble.NewMinhash(mhSeed, mhSize),
+					hyperloglog: hyperloglog.New(),
 				}
 			}
-			for col, val := range record {
-				domainVals[col][val] = true
-			}
 		}
-		for i, values := range domainVals {
-			key := domainKey{datasetID, strconv.Itoa(i)}
-			out <- domain{values, key}
+		for col, sketch := range columnSketches {
+			v := []byte(record[col])
+			sketch.minhash.Push(v)
+			sketch.hyperloglog.Insert(v)
 		}
-		close(out)
-	}()
-	return out
-}
-
-// Returns a channel of domains read from a dataset directory.
-func readDomains(dir string) chan domain {
-	out := make(chan domain)
-
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		panic(err)
 	}
-	go func() {
-		for _, file := range files {
-			if !file.IsDir() {
-				continue
-			}
-			datasetDir := file.Name()
-			csvfile, err := os.Open(filepath.Join(dir, datasetDir, "rows.csv"))
-			if err != nil {
-				panic(err)
-			}
-			for domain := range domainsFromCSV(csvfile, datasetDir) {
-				out <- domain
-			}
-			csvfile.Close()
-		}
-		close(out)
-	}()
-	return out
-}
-
-func minhashDomain(domain domain, seed int64, numHash int) *lshensemble.DomainRecord {
-	mh := lshensemble.NewMinhash(seed, numHash)
-	for v := range domain.values {
-		mh.Push([]byte(v))
+	if columnSketches == nil {
+		return nil
 	}
-	return &lshensemble.DomainRecord{
-		Key:       domain.key,
-		Size:      len(domain.values),
-		Signature: mh.Signature(),
+	for col, sketch := range columnSketches {
+		domainRecords = append(domainRecords, &lshensemble.DomainRecord{
+			Key:       domainKey{datasetID, strconv.Itoa(col)},
+			Size:      int(sketch.hyperloglog.Estimate()),
+			Signature: sketch.minhash.Signature(),
+		})
 	}
-}
-
-func memStats() {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	fmt.Fprintln(
-		os.Stderr,
-		"Alloc:", m.Alloc/1024,
-		"TotalAlloc:", m.TotalAlloc/1024,
-		"Sys:", m.Sys/1024,
-		"Mallocs:", m.Mallocs)
+	return domainRecords
 }
 
 func main() {
+	f, _ := os.Create("cpu.prof")
+	defer f.Close()
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
+
 	// Read and minhash indexed and query domains
 
 	// Minhash seed
@@ -119,21 +83,28 @@ func main() {
 
 	var domainRecords []*lshensemble.DomainRecord
 
-	for domain := range readDomains("datasets") {
-		rec := minhashDomain(domain, seed, numHash)
-		domainRecords = append(domainRecords, rec)
-		fmt.Println("minhashed", rec.Key)
+	files, err := ioutil.ReadDir("datasets")
+	if err != nil {
+		panic(err)
+	}
+	for _, file := range files {
+		if !file.IsDir() {
+			continue
+		}
+		datasetID := file.Name()
+		csvfile, err := os.Open(filepath.Join("datasets", datasetID, "rows.csv"))
+		if err != nil {
+			panic(err)
+		}
+		for _, domainRecord := range sketchDataset(csvfile, datasetID, seed, numHash) {
+			domainRecords = append(domainRecords, domainRecord)
+		}
+		csvfile.Close()
+		fmt.Println("sketched", datasetID)
 	}
 
-	var queries []*lshensemble.DomainRecord
-
-	for domain := range domainsFromCSV(os.Stdin, "query") {
-		rec := minhashDomain(domain, seed, numHash)
-		queries = append(queries, rec)
-		fmt.Println("minhashed", rec.Key)
-	}
-
-	memStats()
+	queries := sketchDataset(os.Stdin, "query", seed, numHash)
+	fmt.Println("sketched query")
 
 	// Build LSH Ensemble index
 
@@ -152,25 +123,19 @@ func main() {
 		panic(err)
 	}
 
-	memStats()
-
 	// Run a query for each domain in the query dataset
 
 	// Containment threshold
 	threshold := 0.5
 
 	for _, query := range queries {
-		// Get the keys of the candidate domains (may contain false positives)
-		// through a channel with option to cancel early.
 		done := make(chan struct{})
 		defer close(done)
 		results := index.Query(query.Signature, query.Size, threshold, done)
 
 		for key := range results {
-			// TODO: Check the containment
+			// TODO: Check the containment to remove false positives
 			fmt.Println(key, "can be joined with", query.Key)
 		}
 	}
-
-	memStats()
 }
