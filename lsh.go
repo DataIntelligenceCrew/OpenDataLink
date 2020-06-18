@@ -12,6 +12,7 @@ import (
 	"runtime/pprof"
 	"sort"
 	"strconv"
+	"sync"
 )
 
 type domainKey struct {
@@ -82,26 +83,38 @@ func main() {
 	numHash := 256
 
 	var domainRecords []*lshensemble.DomainRecord
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
 
 	files, err := ioutil.ReadDir("datasets")
 	if err != nil {
 		panic(err)
 	}
+
 	for _, file := range files {
 		if !file.IsDir() {
 			continue
 		}
-		datasetID := file.Name()
-		csvfile, err := os.Open(filepath.Join("datasets", datasetID, "rows.csv"))
-		if err != nil {
-			panic(err)
-		}
-		for _, domainRecord := range sketchDataset(csvfile, datasetID, seed, numHash) {
-			domainRecords = append(domainRecords, domainRecord)
-		}
-		csvfile.Close()
-		fmt.Println("sketched", datasetID)
+		wg.Add(1)
+		go func(f os.FileInfo, wg *sync.WaitGroup) {
+			defer wg.Done()
+			datasetID := f.Name()
+			csvfile, err := os.Open(filepath.Join("datasets", datasetID, "rows.csv"))
+			defer csvfile.Close()
+			if err != nil {
+				panic(err)
+			}
+			recs := sketchDataset(csvfile, datasetID, seed, numHash)
+			mutex.Lock()
+			for _, domainRecord := range recs {
+				domainRecords = append(domainRecords, domainRecord)
+			}
+			mutex.Unlock()
+			fmt.Println("sketched", datasetID)
+		}(file, &wg)
 	}
+
+	wg.Wait()
 
 	queries := sketchDataset(os.Stdin, "query", seed, numHash)
 	fmt.Println("sketched query")
