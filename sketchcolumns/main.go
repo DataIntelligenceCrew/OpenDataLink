@@ -58,6 +58,10 @@ func (s *columnSketch) update(v []byte) {
 
 func sketchDataset(datasetID string) {
 	csvfile, err := os.Open(filepath.Join(datasetsDir, datasetID, "rows.csv"))
+	if os.IsNotExist(err) {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -66,6 +70,7 @@ func sketchDataset(datasetID string) {
 	tableSketch := tableSketch{datasetID: datasetID}
 
 	r := csv.NewReader(csvfile)
+	r.LazyQuotes = true
 	r.ReuseRecord = true
 
 	for {
@@ -122,11 +127,8 @@ func main() {
 		panic(err)
 	}
 	for _, f := range files {
-		if !f.IsDir() {
-			continue
-		}
 		datasetID := f.Name()
+		fmt.Println("sketching", datasetID)
 		sketchDataset(datasetID)
-		fmt.Println("sketched", datasetID)
 	}
 }

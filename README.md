@@ -1,15 +1,16 @@
 # REU2020
 
-### Download datasets
+### Download datasets and metadata
 
-    ./socratadl
+    ./socratadl [socrata app token]
 
 ### Sketch datasets
 
-Create SQLite database:
+Create the `column_sketches` table:
 
     sqlite3 opendatalink.sqlite < create_sketch_table.sql
 
-Sketch datasets:
+Run `sketchcolumns` to sketch (minhash) dataset columns and store them in the
+`column_sketches` table.
 
-    go run sketchdomains/main.go
+    go run sketchcolumns/main.go
