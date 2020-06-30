@@ -1,9 +1,11 @@
 #!/bin/sh
 
-# Download all datasets on Socrata.
+# Download Socrata datasets.
+# Usage: socratadl [socrata app token]
 # Requires curl and jq.
-# Datasets are saved to datasets/<id>/rows.csv and the metadata is saved to
-# datasets/<id>/metadata.json where <id> is the Socrata dataset four-by-four.
+# Datasets are saved to datasets/id/rows.csv and metadata is saved to
+# datasets/id/metadata.json where id is the Socrata dataset four-by-four.
+# The metadata is the result object returned by the Socrata Discovery API.
 
 if [ -d datasets ]; then
     echo "datasets directory already exists"
@@ -13,19 +15,31 @@ fi
 mkdir datasets
 cd datasets || exit 1
 
-# Limited to NYC health data for now (~120 datasets).
-discovery_api_url='http://api.us.socrata.com/api/catalog/v1?domains=data.cityofnewyork.us&categories=Health&only=datasets&limit=1000'
+app_token=$1
+discovery_api_url='https://api.us.socrata.com/api/catalog/v1'
+scrollid=
 
-curl -# "$discovery_api_url" -o catalog.json
+while true; do
+    res=$(curl --no-progress-meter -f -G "$discovery_api_url" \
+        -d only=datasets \
+        -d provenance=official \
+        -d limit=50 \
+        -d scroll_id="$scrollid" \
+        -H "X-App-Token: $app_token") || continue
 
-jq -c '.results[]' catalog.json |
-while IFS= read -r resource
-do
-    id=$(echo "$resource" | jq -r '.resource.id')
-    echo "Downloading dataset $id"
-    mkdir "$id"
-    echo "$resource" | jq > "$id/metadata.json"
-    domain=$(echo "$resource" | jq -r '.metadata.domain')
-    download_url="$domain/api/views/$id/rows.csv?accessType=DOWNLOAD"
-    curl -# "$download_url" -o "$id/rows.csv"
+    if [ "$(printf '%s' "$res" | jq '.results | length')" -eq 0 ]; then
+        break
+    fi
+    scrollid=$(printf '%s' "$res" | jq -r '.results[-1].resource.id')
+
+    printf '%s' "$res" | jq -c '.results[]' |
+    while IFS= read -r resource; do
+        id=$(printf '%s' "$resource" | jq -r '.resource.id')
+        echo "downloading dataset $id"
+        mkdir "$id"
+        printf '%s' "$resource" | jq '.' > "$id/metadata.json"
+        domain=$(printf '%s' "$resource" | jq -r '.metadata.domain')
+        download_url="$domain/api/views/$id/rows.csv?accessType=DOWNLOAD"
+        curl --no-progress-meter -f -o "$id/rows.csv" "$download_url"
+    done
 done
