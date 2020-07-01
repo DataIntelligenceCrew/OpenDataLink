@@ -3,11 +3,13 @@ package main
 import (
 	"database/sql"
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/pprof"
 
 	"github.com/axiomhq/hyperloglog"
@@ -30,9 +32,8 @@ type tableSketch struct {
 
 func (s *tableSketch) update(record []string) {
 	if s.columnSketches == nil {
-		for i, v := range record {
+		for _, v := range record {
 			s.columnSketches = append(s.columnSketches, &columnSketch{
-				columnID:    fmt.Sprint(s.datasetID, "-", i),
 				columnName:  v,
 				minhash:     lshensemble.NewMinhash(mhSeed, mhSize),
 				hyperloglog: hyperloglog.New(),
@@ -45,7 +46,6 @@ func (s *tableSketch) update(record []string) {
 }
 
 type columnSketch struct {
-	columnID    string
 	columnName  string
 	minhash     *lshensemble.Minhash
 	hyperloglog *hyperloglog.Sketch
@@ -56,19 +56,14 @@ func (s *columnSketch) update(v []byte) {
 	s.hyperloglog.Insert(v)
 }
 
-func sketchDataset(datasetID string) {
-	csvfile, err := os.Open(filepath.Join(datasetsDir, datasetID, "rows.csv"))
-	if os.IsNotExist(err) {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
+func sketchDataset(path, datasetID string) (*tableSketch, error) {
+	csvfile, err := os.Open(path)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer csvfile.Close()
 
 	tableSketch := tableSketch{datasetID: datasetID}
-
 	r := csv.NewReader(csvfile)
 	r.LazyQuotes = true
 	r.ReuseRecord = true
@@ -84,8 +79,80 @@ func sketchDataset(datasetID string) {
 		tableSketch.update(record)
 	}
 	if tableSketch.columnSketches == nil {
-		return
+		return nil, nil
 	}
+	return &tableSketch, nil
+}
+
+func writeSketch(db *sql.DB, sketch *tableSketch) {
+	stmt, err := db.Prepare(`
+	INSERT INTO column_sketches
+	(column_id, dataset_id, column_name, distinct_count, minhash)
+	VALUES (?, ?, ?, ?, ?);
+	`)
+	if err != nil {
+		panic(err)
+	}
+	defer stmt.Close()
+
+	for i, colSketch := range sketch.columnSketches {
+		_, err = stmt.Exec(
+			fmt.Sprint(sketch.datasetID, "-", i),
+			sketch.datasetID,
+			colSketch.columnName,
+			colSketch.hyperloglog.Estimate(),
+			lshensemble.SigToBytes(colSketch.minhash.Signature()))
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func sketchWorker(jobs <-chan string, out chan<- *tableSketch) {
+	for datasetID := range jobs {
+		fmt.Println("sketching", datasetID)
+		path := filepath.Join(datasetsDir, datasetID, "rows.csv")
+		sketch, err := sketchDataset(path, datasetID)
+		if os.IsNotExist(err) {
+			fmt.Fprintln(os.Stderr, err)
+		} else if err != nil {
+			panic(err)
+		}
+		out <- sketch
+	}
+}
+
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
+
+func main() {
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			panic(err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	files, err := ioutil.ReadDir(datasetsDir)
+	if err != nil {
+		panic(err)
+	}
+	jobs := make(chan string, len(files))
+	out := make(chan *tableSketch, len(files))
+
+	for i := 0; i < 10; i++ {
+		go sketchWorker(jobs, out)
+	}
+	for _, f := range files {
+		jobs <- f.Name()
+	}
+	close(jobs)
 
 	db, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
@@ -93,42 +160,21 @@ func sketchDataset(datasetID string) {
 	}
 	defer db.Close()
 
-	for _, sketch := range tableSketch.columnSketches {
-		stmt, err := db.Prepare(`
-		INSERT INTO column_sketches
-		(column_id, dataset_id, column_name, distinct_count, minhash)
-		VALUES (?, ?, ?, ?, ?);
-		`)
+	for range files {
+		if sketch := <-out; sketch != nil {
+			writeSketch(db, sketch)
+		}
+	}
+
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
 		if err != nil {
 			panic(err)
 		}
-		defer stmt.Close()
-
-		_, err = stmt.Exec(
-			sketch.columnID,
-			tableSketch.datasetID,
-			sketch.columnName,
-			sketch.hyperloglog.Estimate(),
-			lshensemble.SigToBytes(sketch.minhash.Signature()))
-		if err != nil {
+		defer f.Close()
+		runtime.GC()
+		if err := pprof.WriteHeapProfile(f); err != nil {
 			panic(err)
 		}
-	}
-}
-
-func main() {
-	f, _ := os.Create("cpu.prof")
-	defer f.Close()
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
-
-	files, err := ioutil.ReadDir(datasetsDir)
-	if err != nil {
-		panic(err)
-	}
-	for _, f := range files {
-		datasetID := f.Name()
-		fmt.Println("sketching", datasetID)
-		sketchDataset(datasetID)
 	}
 }
