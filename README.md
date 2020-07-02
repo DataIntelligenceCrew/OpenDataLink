@@ -2,7 +2,7 @@
 
 ### Download datasets and metadata
 
-    ./socratadl [socrata app token]
+    ./socratadl [app token file]
 
 ### Sketch datasets
 

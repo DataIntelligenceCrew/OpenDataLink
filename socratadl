@@ -1,21 +1,15 @@
 #!/bin/sh
 
 # Download Socrata datasets.
-# Usage: socratadl [socrata app token]
+# Usage: socratadl [app token file]
 # Requires curl and jq.
 # Datasets are saved to datasets/id/rows.csv and metadata is saved to
 # datasets/id/metadata.json where id is the Socrata dataset four-by-four.
 # The metadata is the result object returned by the Socrata Discovery API.
 
-if [ -d datasets ]; then
-    echo "datasets directory already exists"
-    exit 1
-fi
+mkdir datasets && cd datasets || exit 1
 
-mkdir datasets
-cd datasets || exit 1
-
-app_token=$1
+app_token=$([ -f "$1" ] && head -1 "$1")
 discovery_api_url='https://api.us.socrata.com/api/catalog/v1'
 scrollid=
 
