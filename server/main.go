@@ -41,12 +41,12 @@ func buildIndex(db *sql.DB) *lshensemble.LshEnsemble {
 	for rows.Next() {
 		var columnID string
 		var distinctCount int
-		var minhash string
+		var minhash []byte
 
 		if err = rows.Scan(&columnID, &distinctCount, &minhash); err != nil {
 			log.Fatalln(err)
 		}
-		sig, err := lshensemble.BytesToSig([]byte(minhash))
+		sig, err := lshensemble.BytesToSig(minhash)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -115,10 +115,11 @@ func main() {
 		var columnID string
 		var columnName string
 		var distinctCount int
-		var minhash string
+		var minhash []byte
 
 		err = stmt.QueryRow(query).Scan(
 			&columnID, &columnName, &distinctCount, &minhash)
+		// TODO: Handle no rows
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -128,11 +129,10 @@ func main() {
 			Results    []string
 		}{ColumnName: columnName}
 
-		sig, err := lshensemble.BytesToSig([]byte(minhash))
+		sig, err := lshensemble.BytesToSig(minhash)
 		if err != nil {
 			log.Fatalln(err)
 		}
-
 		done := make(chan struct{})
 		defer close(done)
 		results := index.Query(sig, distinctCount, threshold, done)

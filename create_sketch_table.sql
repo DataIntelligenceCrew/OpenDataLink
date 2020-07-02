@@ -8,7 +8,6 @@ CREATE TABLE column_sketches (
     -- An approximate distinct count of the values.
     distinct_count INT NOT NULL,
     -- The minhash signature of the column.
-    minhash TEXT NOT NULL
+    minhash BLOB NOT NULL
 );
-
 CREATE INDEX column_sketches_dataset_idx ON column_sketches(dataset_id);

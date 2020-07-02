@@ -90,7 +90,7 @@ func writeSketch(db *sql.DB, sketch *tableSketch) {
 	stmt, err := db.Prepare(`
 	INSERT INTO column_sketches
 	(column_id, dataset_id, column_name, distinct_count, minhash)
-	VALUES (?, ?, ?, ?, ?);
+	VALUES (?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		log.Fatalln(err)
