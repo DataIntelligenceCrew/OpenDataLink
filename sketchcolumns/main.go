@@ -3,10 +3,12 @@ package main
 import (
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -74,7 +76,7 @@ func sketchDataset(path, datasetID string) (*tableSketch, error) {
 			break
 		}
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		tableSketch.update(record)
 	}
@@ -91,7 +93,7 @@ func writeSketch(db *sql.DB, sketch *tableSketch) {
 	VALUES (?, ?, ?, ?, ?);
 	`)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 	defer stmt.Close()
 
@@ -103,20 +105,22 @@ func writeSketch(db *sql.DB, sketch *tableSketch) {
 			colSketch.hyperloglog.Estimate(),
 			lshensemble.SigToBytes(colSketch.minhash.Signature()))
 		if err != nil {
-			panic(err)
+			log.Fatalln(err)
 		}
 	}
 }
 
 func sketchWorker(jobs <-chan string, out chan<- *tableSketch) {
 	for datasetID := range jobs {
-		fmt.Println("sketching", datasetID)
+		log.Println("sketching", datasetID)
 		path := filepath.Join(datasetsDir, datasetID, "rows.csv")
 		sketch, err := sketchDataset(path, datasetID)
-		if os.IsNotExist(err) {
-			fmt.Fprintln(os.Stderr, err)
-		} else if err != nil {
-			panic(err)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) || errors.Is(err, csv.ErrFieldCount) {
+				log.Println(err)
+			} else {
+				log.Fatalln(err)
+			}
 		}
 		out <- sketch
 	}
@@ -130,18 +134,18 @@ func main() {
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
-			panic(err)
+			log.Fatalln(err)
 		}
 		defer f.Close()
 		if err := pprof.StartCPUProfile(f); err != nil {
-			panic(err)
+			log.Fatalln(err)
 		}
 		defer pprof.StopCPUProfile()
 	}
 
 	files, err := ioutil.ReadDir(datasetsDir)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 	jobs := make(chan string, len(files))
 	out := make(chan *tableSketch, len(files))
@@ -156,7 +160,7 @@ func main() {
 
 	db, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 	defer db.Close()
 
@@ -165,16 +169,17 @@ func main() {
 			writeSketch(db, sketch)
 		}
 	}
+	log.Println("done writing sketches")
 
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
 		if err != nil {
-			panic(err)
+			log.Fatalln(err)
 		}
 		defer f.Close()
 		runtime.GC()
 		if err := pprof.WriteHeapProfile(f); err != nil {
-			panic(err)
+			log.Fatalln(err)
 		}
 	}
 }
