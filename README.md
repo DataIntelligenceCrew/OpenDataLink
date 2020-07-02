@@ -14,3 +14,7 @@ Run `sketchcolumns` to sketch (minhash) dataset columns and store them in the
 `column_sketches` table.
 
     go run sketchcolumns/main.go
+
+### Start server
+
+    go run server/main.go
