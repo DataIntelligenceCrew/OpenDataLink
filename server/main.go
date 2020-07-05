@@ -2,11 +2,9 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
-	"sort"
 
 	"github.com/ekzhu/lshensemble"
 	_ "github.com/mattn/go-sqlite3"
@@ -32,9 +30,10 @@ func buildIndex(db *sql.DB) *lshensemble.LshEnsemble {
 	rows, err := db.Query(`
 	SELECT column_id, distinct_count, minhash
 	FROM column_sketches
+	ORDER BY distinct_count
 	`)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
 	defer rows.Close()
 
@@ -44,11 +43,11 @@ func buildIndex(db *sql.DB) *lshensemble.LshEnsemble {
 		var minhash []byte
 
 		if err = rows.Scan(&columnID, &distinctCount, &minhash); err != nil {
-			log.Fatalln(err)
+			log.Fatal(err)
 		}
 		sig, err := lshensemble.BytesToSig(minhash)
 		if err != nil {
-			log.Fatalln(err)
+			log.Fatal(err)
 		}
 		domainRecords = append(domainRecords, &lshensemble.DomainRecord{
 			Key:       columnID,
@@ -57,28 +56,33 @@ func buildIndex(db *sql.DB) *lshensemble.LshEnsemble {
 		})
 	}
 	if err := rows.Err(); err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
-
-	sort.Sort(lshensemble.BySize(domainRecords))
 
 	index, err := lshensemble.BootstrapLshEnsembleEquiDepth(
 		numPart, mhSize, maxK, len(domainRecords), lshensemble.Recs2Chan(domainRecords))
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
 	return index
 }
 
-var page = template.Must(template.New("joinable-columns").Parse(`
+var joinability_page = template.Must(template.New("joinable-columns").Parse(`
 <html>
 <head>
 <title>Open Data Link</title>
 </head>
 <body>
-<h1>Open Data Link</h1>
+<h2>{{.DatasetName}}</h2>
 <h3>Showing joinable tables on <i>{{.ColumnName}}</i></h3>
-{{range .Results}}<p>{{.}}</p>{{else}}<p>No results</p>{{end}}
+{{range .Results}}
+	<p>
+	{{.DatasetName}} &gt; <a href="/joinable-columns?q={{.ColumnId}}">{{.ColumnName}}</a>
+	(containment: {{.Containment}})
+	</p>
+{{else}}
+	<p>No joinable tables.</p>
+{{end}}
 </body>
 </html>
 `))
@@ -86,63 +90,112 @@ var page = template.Must(template.New("joinable-columns").Parse(`
 func main() {
 	db, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
 	// Build LSH Ensemble index
 	index := buildIndex(db)
 	log.Println("built index")
 	db.Close()
 
+	// TODO: Use /joinable-columns/column-id
 	http.HandleFunc("/joinable-columns", func(w http.ResponseWriter, req *http.Request) {
 		db, err := sql.Open("sqlite3", databasePath)
 		if err != nil {
-			log.Fatalln(err)
+			log.Fatal(err)
 		}
 		defer db.Close()
 
-		query := req.FormValue("q")
+		qColID := req.FormValue("q")
 
-		stmt, err := db.Prepare(`
-		SELECT column_id, column_name, distinct_count, minhash
+		sketchSql, err := db.Prepare(`
+		SELECT dataset_id, column_name, distinct_count, minhash
 		FROM column_sketches
 		WHERE column_id = ?
 		`)
 		if err != nil {
-			log.Fatalln(err)
+			log.Fatal(err)
 		}
-		defer stmt.Close()
+		defer sketchSql.Close()
 
-		var columnID string
-		var columnName string
-		var distinctCount int
-		var minhash []byte
+		var qDatasetID string
+		var qColName string
+		var qSize int
+		var qMinhash []byte
 
-		err = stmt.QueryRow(query).Scan(
-			&columnID, &columnName, &distinctCount, &minhash)
-		// TODO: Handle no rows
+		err = sketchSql.QueryRow(qColID).Scan(&qDatasetID, &qColName, &qSize, &qMinhash)
 		if err != nil {
-			log.Fatalln(err)
+			if err == sql.ErrNoRows {
+				http.NotFound(w, req)
+				return
+			}
+			log.Fatal(err)
 		}
 
+		nameSql, err := db.Prepare(`SELECT name FROM metadata WHERE dataset_id = ?`)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer nameSql.Close()
+
+		var qDatasetName string
+		if err = nameSql.QueryRow(qDatasetID).Scan(&qDatasetName); err != nil {
+			log.Fatal(err)
+		}
+
+		type result struct {
+			DatasetName string
+			ColumnId    string
+			ColumnName  string
+			Containment float64
+		}
 		data := struct {
-			ColumnName string
-			Results    []string
-		}{ColumnName: columnName}
+			DatasetName string
+			ColumnName  string
+			Results     []result
+		}{
+			DatasetName: qDatasetName,
+			ColumnName:  qColName,
+		}
 
-		sig, err := lshensemble.BytesToSig(minhash)
+		qSig, err := lshensemble.BytesToSig(qMinhash)
 		if err != nil {
-			log.Fatalln(err)
+			log.Fatal(err)
 		}
 		done := make(chan struct{})
 		defer close(done)
-		results := index.Query(sig, distinctCount, threshold, done)
+		results := index.Query(qSig, qSize, threshold, done)
 
 		for key := range results {
-			// TODO: Check the containment to remove false positives
-			data.Results = append(data.Results, key.(string))
+			colID := key.(string)
+			// Don't include query in results
+			if colID == qColID {
+				continue
+			}
+			var datasetID string
+			var colName string
+			var size int
+			var minhash []byte
+			var datasetName string
+
+			err = sketchSql.QueryRow(colID).Scan(&datasetID, &colName, &size, &minhash)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err = nameSql.QueryRow(datasetID).Scan(&datasetName); err != nil {
+				log.Fatal(err)
+			}
+			sig, err := lshensemble.BytesToSig(minhash)
+			if err != nil {
+				log.Fatal(err)
+			}
+			containment := lshensemble.Containment(qSig, sig, qSize, size)
+			if containment < threshold {
+				continue
+			}
+			data.Results = append(data.Results, result{datasetName, colID, colName, containment})
 		}
-		page.Execute(w, data)
+		joinability_page.Execute(w, data)
 	})
 
-	fmt.Println(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }

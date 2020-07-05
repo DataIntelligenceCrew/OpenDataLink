@@ -93,7 +93,7 @@ func writeSketch(db *sql.DB, sketch *tableSketch) {
 	VALUES (?, ?, ?, ?, ?)
 	`)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
 	defer stmt.Close()
 
@@ -105,7 +105,7 @@ func writeSketch(db *sql.DB, sketch *tableSketch) {
 			colSketch.hyperloglog.Estimate(),
 			lshensemble.SigToBytes(colSketch.minhash.Signature()))
 		if err != nil {
-			log.Fatalln(err)
+			log.Fatal(err)
 		}
 	}
 }
@@ -119,7 +119,7 @@ func sketchWorker(jobs <-chan string, out chan<- *tableSketch) {
 			if errors.Is(err, os.ErrNotExist) || errors.Is(err, csv.ErrFieldCount) {
 				log.Println(err)
 			} else {
-				log.Fatalln(err)
+				log.Fatal(err)
 			}
 		}
 		out <- sketch
@@ -134,18 +134,18 @@ func main() {
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
-			log.Fatalln(err)
+			log.Fatal(err)
 		}
 		defer f.Close()
 		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatalln(err)
+			log.Fatal(err)
 		}
 		defer pprof.StopCPUProfile()
 	}
 
 	files, err := ioutil.ReadDir(datasetsDir)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
 	jobs := make(chan string, len(files))
 	out := make(chan *tableSketch, len(files))
@@ -160,7 +160,7 @@ func main() {
 
 	db, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
 	defer db.Close()
 
@@ -174,12 +174,12 @@ func main() {
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
 		if err != nil {
-			log.Fatalln(err)
+			log.Fatal(err)
 		}
 		defer f.Close()
 		runtime.GC()
 		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.Fatalln(err)
+			log.Fatal(err)
 		}
 	}
 }
