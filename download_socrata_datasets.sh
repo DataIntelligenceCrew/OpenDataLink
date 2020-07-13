@@ -5,7 +5,7 @@
 # Requires curl and jq.
 # Datasets are saved to datasets/id/rows.csv and metadata is saved to
 # datasets/id/metadata.json where id is the Socrata dataset four-by-four.
-# The metadata is a JSON object returned by the Socrata Discovery API.
+# The metadata is the result object returned and defined by the Socrata Discovery API.
 
 mkdir datasets && cd datasets || exit 1
 
