@@ -67,7 +67,7 @@ func buildIndex(db *sql.DB) *lshensemble.LshEnsemble {
 	return index
 }
 
-var joinability_page = template.Must(template.New("joinable-columns").Parse(`
+var joinabilityPage = template.Must(template.New("joinable-columns").Parse(`
 <html>
 <head>
 <title>Open Data Link</title>
@@ -107,7 +107,7 @@ func main() {
 
 		qColID := req.FormValue("q")
 
-		sketchSql, err := db.Prepare(`
+		sketchSQL, err := db.Prepare(`
 		SELECT dataset_id, column_name, distinct_count, minhash
 		FROM column_sketches
 		WHERE column_id = ?
@@ -115,14 +115,14 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer sketchSql.Close()
+		defer sketchSQL.Close()
 
 		var qDatasetID string
 		var qColName string
 		var qSize int
 		var qMinhash []byte
 
-		err = sketchSql.QueryRow(qColID).Scan(&qDatasetID, &qColName, &qSize, &qMinhash)
+		err = sketchSQL.QueryRow(qColID).Scan(&qDatasetID, &qColName, &qSize, &qMinhash)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.NotFound(w, req)
@@ -131,20 +131,20 @@ func main() {
 			log.Fatal(err)
 		}
 
-		nameSql, err := db.Prepare(`SELECT name FROM metadata WHERE dataset_id = ?`)
+		nameSQL, err := db.Prepare(`SELECT name FROM metadata WHERE dataset_id = ?`)
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer nameSql.Close()
+		defer nameSQL.Close()
 
 		var qDatasetName string
-		if err = nameSql.QueryRow(qDatasetID).Scan(&qDatasetName); err != nil {
+		if err = nameSQL.QueryRow(qDatasetID).Scan(&qDatasetName); err != nil {
 			log.Fatal(err)
 		}
 
 		type result struct {
 			DatasetName string
-			ColumnId    string
+			ColumnID    string
 			ColumnName  string
 			Containment float64
 		}
@@ -177,11 +177,11 @@ func main() {
 			var minhash []byte
 			var datasetName string
 
-			err = sketchSql.QueryRow(colID).Scan(&datasetID, &colName, &size, &minhash)
+			err = sketchSQL.QueryRow(colID).Scan(&datasetID, &colName, &size, &minhash)
 			if err != nil {
 				log.Fatal(err)
 			}
-			if err = nameSql.QueryRow(datasetID).Scan(&datasetName); err != nil {
+			if err = nameSQL.QueryRow(datasetID).Scan(&datasetName); err != nil {
 				log.Fatal(err)
 			}
 			sig, err := lshensemble.BytesToSig(minhash)
@@ -194,7 +194,7 @@ func main() {
 			}
 			data.Results = append(data.Results, result{datasetName, colID, colName, containment})
 		}
-		joinability_page.Execute(w, data)
+		joinabilityPage.Execute(w, data)
 	})
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
