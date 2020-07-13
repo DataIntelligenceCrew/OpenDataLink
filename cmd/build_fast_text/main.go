@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	ft := fasttext.New("fast_text_db.sqlite")
+	ft := fasttext.New("fast_text.sqlite")
 	defer func() {
 		if err := ft.Close(); err != nil {
 			log.Fatal(err)

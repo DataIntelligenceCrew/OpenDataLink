@@ -17,6 +17,3 @@ unzip zip_file.zip
 rm zip_file.zip
 ./build_fast_text wiki-news-300d-1M-subword.vec
 rm wiki-news-300d-1M-subword.vec
-
-
-./server
