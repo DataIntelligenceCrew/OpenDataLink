@@ -1,6 +1,10 @@
 #!/bin/bash
 
 
+# Cleanup item left from previous time setup.sh has been run
+rm fast_text.sqlite
+
+
 # Download all of the datasets provided by socrata
 ./download_socrata_datasets.sh
 
