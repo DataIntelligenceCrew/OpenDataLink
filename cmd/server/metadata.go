@@ -265,6 +265,10 @@ func InsertTags(indexBuilder IndexBuilder, fastText *fasttext.FastText, metadata
 	return nil
 }
 
+const dimensionCount = fasttext.Dim
+const hashTableCount = 1
+const hashValuePerHashTableCount = 1
+
 // InsertMetadata adds metadataRows to a simhashlsh.CosineLsh index
 func InsertMetadata(metadataRows *[]Metadata) (Index, error) {
 	indexBuilder := NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount)
@@ -290,10 +294,6 @@ func InsertMetadata(metadataRows *[]Metadata) (Index, error) {
 
 	return indexBuilder.ToIndex(), nil
 }
-
-const dimensionCount = fasttext.Dim
-const hashTableCount = 1
-const hashValuePerHashTableCount = 1
 
 // BuildMetadataIndex builds a LSH index using github.com/fnargesian/simhash-lsh
 func BuildMetadataIndex(db *sql.DB) (Index, error) {
