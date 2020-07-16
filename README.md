@@ -1,28 +1,9 @@
-# REU2020
+# Open Data Link
 
-### Download datasets and metadata
+### Set up your enviroment 
 
-    ./socratadl [app token file]
+    ./setup.sh
 
-### Sketch datasets
+### Start the server 
 
-Create the `column_sketches` table:
-
-    sqlite3 opendatalink.sqlite < sql/create_column_sketches_table.sql
-
-Run `sketchcolumns` to sketch (minhash) dataset columns and store them in the
-`column_sketches` table.
-
-    go run sketchcolumns/main.go
-
-### Extract metadata
-
-Create the `metadata` table:
-
-    sqlite3 opendatalink.sqlite < sql/create_metadata_table.sql
-
-Run `extractmeta`.
-
-### Start server
-
-    go run server/main.go
+    ./server
