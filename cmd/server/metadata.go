@@ -1,6 +1,9 @@
 package main
 
-import "database/sql"
+import (
+	"database/sql"
+	"github.com/fnargesian/simhash-lsh"
+)
 
 type metadataRaw struct {
 	ID           *string // four-by-four (e.g. "ad4f-f5gs")
@@ -73,13 +76,25 @@ func metadataRawRows(db *sql.DB) (*[]metadataRaw, error) {
 // 	}
 // }
 
-func buildMetadataIndex(db *sql.DB) error {
+
+func buildMetadataIndex(db *sql.DB) (Index, error) {
 	_, err := metadataRawRows(db)
 	if err != nil {
-		return err
+		return Index{}, err
 	}
 
 	// cleanMetadataRawRows(metadataRawRows)
 
-	return nil
+	return Index{}, nil
+}
+
+// Index is a wrapper of simhashlsh.CosineLsh
+type Index struct {
+	index *simhashlsh.CosineLsh
+}
+
+// Query finds the ids of approximate nearest neighbour candidates, in 
+// un-sorted order, given the query point.
+func (i Index) Query(query []float64) []string {
+	return i.index.Query(query)
 }

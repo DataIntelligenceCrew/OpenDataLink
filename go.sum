@@ -18,11 +18,11 @@ github.com/dgryski/go-spooky v0.0.0-20170606183049-ed3d087f40e2 h1:lx1ZQgST/imDh
 github.com/dgryski/go-spooky v0.0.0-20170606183049-ed3d087f40e2/go.mod h1:hgHYKsoIw7S/hlWtP7wD1wZ7SX1jPTtKko5X9jrOgPQ=
 github.com/ekzhu/lshensemble v1.1.0 h1:qxuckiF7m1ARGe8zxyqmzWFgpNVAsORbatF5XIj/oYc=
 github.com/ekzhu/lshensemble v1.1.0/go.mod h1:9O+7M8zbVXy2WMyTT0zgia+rsQXrX0gB9CihuFwwRK8=
+github.com/fnargesian/simhash-lsh v0.0.0-20170609134222-101771fa42e3 h1:MfHMYupD/2u0qdJc45/WumCTgEFMBJF59ouoE5W1hFE=
+github.com/fnargesian/simhash-lsh v0.0.0-20170609134222-101771fa42e3/go.mod h1:f3psEjLkLLxIvKjYsIgSRKhg2WZuZR+uFIThcZLsWpY=
 github.com/gaspiman/cosine_similarity v0.0.0-20150401203709-3a4668276fe3 h1:aKYgwrbAYb+3gN+Z4eEaxa9o1ZpXxymoa3rdibvbimo=
 github.com/gaspiman/cosine_similarity v0.0.0-20150401203709-3a4668276fe3/go.mod h1:nhUMF4OrDyYqXmau/btY6JRqOKpUuIyKgCEKRrn5i0Y=
 github.com/influxdata/influxdb v1.7.6/go.mod h1:qZna6X/4elxqT3yI9iZYdZrWWdeFOOprn86kgg4+IzY=
-github.com/justinfargnoli/go-fasttext v0.0.0-20200712202926-2d63e7e83619 h1:rWzY2nYT9PNXaFmcAXpO/9KhFCG3HtLyE62IEWkrNEc=
-github.com/justinfargnoli/go-fasttext v0.0.0-20200712202926-2d63e7e83619/go.mod h1:/nz5XKeizIrOKof8XaWiYiVySau/ugnOpcMz+SN74uY=
 github.com/justinfargnoli/go-fasttext v0.0.0-20200715213243-a12b86aebc0e h1:FbMDYRs9eBB+3NDir381HWwrZh+KoYdd5MgQPhTA1tI=
 github.com/justinfargnoli/go-fasttext v0.0.0-20200715213243-a12b86aebc0e/go.mod h1:/nz5XKeizIrOKof8XaWiYiVySau/ugnOpcMz+SN74uY=
 github.com/mattn/go-sqlite3 v1.14.0 h1:mLyGNKR8+Vv9CAU7PphKa2hkEqxxhn8i32J6FPj1/QA=
