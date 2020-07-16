@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"log"
 	"strings"
 
 	"github.com/fnargesian/simhash-lsh"
@@ -95,7 +96,7 @@ func (metadata *Metadata) DescriptionClean() []string {
 	return strings.Fields(*metadata.Description)
 }
 
-// DescriptionEmbeddingVectors returns an array of embedding vectors which 
+// DescriptionEmbeddingVectors returns an array of embedding vectors which
 // represent the words of Metadata.Description
 func (metadata *Metadata) DescriptionEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
 	descriptionClean := metadata.DescriptionClean()
@@ -125,7 +126,7 @@ func (metadata *Metadata) AttributionClean() []string {
 	return strings.Fields(*metadata.Attribution)
 }
 
-// AttributionEmbeddingVectors returns an array of embedding vectors which 
+// AttributionEmbeddingVectors returns an array of embedding vectors which
 // represent the words of Metadata.Attribution
 func (metadata *Metadata) AttributionEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
 	attributionClean := metadata.AttributionClean()
@@ -155,7 +156,7 @@ func (metadata *Metadata) CategoriesClean() []string {
 	return strings.Fields(*metadata.Categories)
 }
 
-// CategoriesEmbeddingVectors returns an array of embedding vectors which 
+// CategoriesEmbeddingVectors returns an array of embedding vectors which
 // represent the words of Metadata.Categories
 func (metadata *Metadata) CategoriesEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
 	categoriesClean := metadata.CategoriesClean()
@@ -185,7 +186,7 @@ func (metadata *Metadata) TagsClean() []string {
 	return strings.Fields(*metadata.Tags)
 }
 
-// TagsEmbeddingVectors returns an array of embedding vectors which 
+// TagsEmbeddingVectors returns an array of embedding vectors which
 // represent the words of Metadata.Tags
 func (metadata *Metadata) TagsEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
 	tagsClean := metadata.TagsClean()
@@ -217,7 +218,48 @@ func BuildMetadataIndex(db *sql.DB) (Index, error) {
 	return Index{}, nil
 }
 
-// Index is a wrapper of simhashlsh.CosineLsh
+// IndexBuilder is a write only wrapper of simhashlsh.CosineLsh
+type IndexBuilder struct {
+	index *simhashlsh.CosineLsh
+}
+
+// NewIndexBuilder constructs an IndexBuilder
+//
+// dimensionCount, hashTableCount, hashValuePerHashTableCount  of
+// NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount)
+// map to simhash.NewCosinLsh(dim, l m)'s dim, l, and m respectivly
+func NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount int) IndexBuilder {
+	return IndexBuilder{
+		index: simhashlsh.NewCosineLsh(dimensionCount, hashTableCount, hashValuePerHashTableCount),
+	}
+}
+
+// ToIndex coverts the IndexBuilder to an Index
+func (indexBuilder IndexBuilder) ToIndex() Index {
+	return Index{
+		index: indexBuilder.index,
+	}
+}
+
+// Insert adds the embeddingVector and id to the index
+func (indexBuilder IndexBuilder) Insert(embeddingVector []float64, ID string) {
+	indexBuilder.Insert(embeddingVector, ID)
+}
+
+// InsertZip zips the embeddingVectors and IDs array into a one dimensional
+// array of (embeddingVector []float64, ID string) tuples which are then added
+// to the index
+func (indexBuilder IndexBuilder) InsertZip(embeddingVectors [][]float64, IDs []string) {
+	if len(embeddingVectors) != len(IDs) {
+		log.Fatal("len(embeddingVectors) !=len(IDs)")
+	}
+
+	for i := range embeddingVectors {
+		indexBuilder.Insert(embeddingVectors[i], IDs[i])
+	}
+}
+
+// Index is a read only wrapper of simhashlsh.CosineLsh
 type Index struct {
 	index *simhashlsh.CosineLsh
 }
