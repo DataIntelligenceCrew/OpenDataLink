@@ -4,6 +4,7 @@
 # Cleanup item left from previous time setup.sh has been run
 rm fast_text.sqlite
 rm -r datasets
+rm -r metadata
 
 # Download and build a fast and persistent fastText database
 curl https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M-subword.vec.zip --output zip_file.zip
@@ -15,6 +16,7 @@ rm wiki-news-300d-1M-subword.vec
 
 
 # Download all of the datasets provided by socrata
+chmod u+x download_socrata_datasets.sh 
 ./download_socrata_datasets.sh
 
 
@@ -26,6 +28,7 @@ sqlite3 opendatalink.sqlite < sql/create_column_sketches_table.sql
 
 # Add the metadata to opendatalink.sqltie
 sqlite3 opendatalink.sqlite < sql/create_metadata_table.sql
+chmod u+x insert_metadata.sh
 ./insert_metadata.sh
 
 

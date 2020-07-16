@@ -1,0 +1,16 @@
+# Temporary Files
+zip_file.zip
+wiki-news-300d-1M-subword.vec
+
+# Datasets
+datasets/
+metadata/
+
+# Binaries
+build_fast_text
+sketch_columns
+server
+
+# SQLite DB
+opendatalink.sqlite
+fast_text.sqlite
