@@ -2,83 +2,113 @@ package main
 
 import (
 	"database/sql"
+	"strings"
+
 	"github.com/fnargesian/simhash-lsh"
 )
 
-type metadataRaw struct {
+// Metadata of a dataset ID, namely Metadata.ID
+// The data is retrieved form the 'Metadata' table in 'opendatalink.sqlite'
+type Metadata struct {
 	ID           *string // four-by-four (e.g. "ad4f-f5gs")
-	name         *string
-	description  *string
-	attribution  *string
-	contactEmail *string
-	updatedAt    *string
-	categories   *string // Comma-separated tags
-	tags         *string // Comma-separated tags
-	permalink    *string // Permant link to the dataset
+	Name         *string
+	Description  *string
+	Attribution  *string
+	ContactEmail *string
+	UpdatedAt    *string
+	Categories   *string // Comma-separated tags
+	Tags         *string // Comma-separated tags
+	Permalink    *string // Permant link to the dataset
 }
 
-// metadataRawRows retreives all data in the Metadata table.
-func metadataRawRows(db *sql.DB) (*[]metadataRaw, error) {
+// MetadataRows retreives all data in the Metadata table.
+func MetadataRows(db *sql.DB) (*[]Metadata, error) {
 	rows, err := db.Query("SELECT * from Metadata;")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var metadataRawRows []metadataRaw
+	var metadataRows []Metadata
 	for isNext := rows.Next(); isNext; isNext = rows.Next() {
-		var metadataRawRow metadataRaw
-		if err := rows.Scan(metadataRawRow.ID, metadataRawRow.name,
-			metadataRawRow.description, metadataRawRow.attribution,
-			metadataRawRow.contactEmail, metadataRawRow.updatedAt,
-			metadataRawRow.categories, metadataRawRow.tags,
-			metadataRawRow.permalink); err != nil {
+		var metadata Metadata
+		if err := rows.Scan(metadata.ID, metadata.Name,
+			metadata.Description, metadata.Attribution, metadata.ContactEmail, 
+			metadata.UpdatedAt, metadata.Categories, metadata.Tags,
+			metadata.Permalink); err != nil {
 			return nil, err
 		}
-		metadataRawRows = append(metadataRawRows, metadataRawRow)
+		metadataRows = append(metadataRows, metadata)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	return &metadataRawRows, nil
+	return &metadataRows, nil
 }
 
-// func (metadataRawRow *metadataRaw) clean()  {
+// isEmpty sets the string to nil if the semantics of the string indicte 
+// that the string is nil.
+func isEmpty(attribute *string) bool {
+	if *attribute == "" || *attribute == "null" || *attribute == "Null" ||
+		*attribute == "NULL" {
+		return true
+	}
+	return false
+}
 
-// }
+// NameClean returns a cleaned version of Metadata.Name()
+// If Metadata.NameClean() == nil, then Metadata.Name() is empty.
+func (metadata *Metadata) NameClean() []string {
+	if isEmpty(metadata.Name) {
+		return nil
+	}
 
-// type metadataClean struct {
-// 	ID           string
-// 	name         []string
-// 	description  []string
-// 	attribution  []string
-// 	contactEmail string
-// 	updatedAt    string
-// 	categories   []string
-// 	tags         []string
-// 	permalink    string
-// }
-// 
-// // cleanEmpty sets the string to nil if the semantics of the string indicte 
-// // that the string is nil.
-// func cleanEmpty(attribute *string) {
-// 	if *attribute == "" || *attribute == "null" || *attribute == "Null" ||
-// 		*attribute == "NULL" {
-// 		attribute = nil
-// 	}
-// }
+	return strings.Fields(*metadata.Name)
+}
 
-// // cleanMetadataRawRows cleans the metadata
-// func cleanMetadataRawRows(metadataRawRows *[]metadataRaw) *[]metadataClean {
-// 	for _, v := range *metadataRawRows {
-		
-// 	}
-// }
+// DescriptionClean returns a cleaned version of Metadata.Description()
+// If Metadata.DescriptionClean() == nil, then Metadata.Description() is empty.
+func (metadata *Metadata) DescriptionClean() []string {
+	if isEmpty(metadata.Description) {
+		return nil
+	}
 
+	return strings.Fields(*metadata.Description)
+}
+
+// AttributionClean returns a cleaned version of Metadata.Attribution()
+// If Metadata.AttributionClean() == nil, then Metadata.Attribution() is empty.
+func (metadata *Metadata) AttributionClean() []string {
+	if isEmpty(metadata.Attribution) {
+		return nil
+	}
+
+	return strings.Fields(*metadata.Attribution)
+}
+
+// CategoriesClean returns a cleaned version of Metadata.Categories()
+// If Metadata.CategoriesClean() == nil, then Metadata.Categories() is empty.
+func (metadata *Metadata) CategoriesClean() []string {
+	if isEmpty(metadata.Categories) {
+		return nil
+	}
+
+	return strings.Fields(*metadata.Categories)
+}
+
+// TagsClean returns a cleaned version of Metadata.Tags()
+// If Metadata.TagsClean() == nil, then Metadata.Tags() is empty.
+func (metadata *Metadata) TagsClean() []string {
+	if isEmpty(metadata.Tags) {
+		return nil
+	}
+
+	return strings.Fields(*metadata.Tags)
+}
 
 func buildMetadataIndex(db *sql.DB) (Index, error) {
-	_, err := metadataRawRows(db)
+	_, err := MetadataRows(db)
 	if err != nil {
 		return Index{}, err
 	}
