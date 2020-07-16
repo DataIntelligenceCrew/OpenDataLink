@@ -112,7 +112,8 @@ func (metadata *Metadata) DescriptionEmbeddingVectors(fastText *fasttext.FastTex
 		if err != nil {
 			return nil, err
 		}
-		descriptionEmbeddingVector = append(descriptionEmbeddingVector, wordEmbeddingVector)
+		descriptionEmbeddingVector =
+			append(descriptionEmbeddingVector, wordEmbeddingVector)
 	}
 
 	return descriptionEmbeddingVector, nil
@@ -144,7 +145,8 @@ func (metadata *Metadata) AttributionEmbeddingVectors(fastText *fasttext.FastTex
 		if err != nil {
 			return nil, err
 		}
-		attributionEmbeddingVector = append(attributionEmbeddingVector, wordEmbeddingVector)
+		attributionEmbeddingVector =
+			append(attributionEmbeddingVector, wordEmbeddingVector)
 	}
 
 	return attributionEmbeddingVector, nil
@@ -176,7 +178,8 @@ func (metadata *Metadata) CategoriesEmbeddingVectors(fastText *fasttext.FastText
 		if err != nil {
 			return nil, err
 		}
-		categoriesEmbeddingVector = append(categoriesEmbeddingVector, wordEmbeddingVector)
+		categoriesEmbeddingVector =
+			append(categoriesEmbeddingVector, wordEmbeddingVector)
 	}
 
 	return categoriesEmbeddingVector, nil
@@ -228,7 +231,8 @@ func InsertName(indexBuilder IndexBuilder, fastText *fasttext.FastText, metadata
 
 // InsertDescription adds Metadata.Description to index
 func InsertDescription(indexBuilder IndexBuilder, fastText *fasttext.FastText, metadata *Metadata) error {
-	descriptionEmbeddingVectors, err := metadata.DescriptionEmbeddingVectors(fastText)
+	descriptionEmbeddingVectors, err :=
+		metadata.DescriptionEmbeddingVectors(fastText)
 	if err != nil {
 		return err
 	}
@@ -241,7 +245,8 @@ func InsertDescription(indexBuilder IndexBuilder, fastText *fasttext.FastText, m
 
 // InsertCategories adds Metadata.Categories to index
 func InsertCategories(indexBuilder IndexBuilder, fastText *fasttext.FastText, metadata *Metadata) error {
-	categoriesEmbeddingVectors, err := metadata.CategoriesEmbeddingVectors(fastText)
+	categoriesEmbeddingVectors, err :=
+		metadata.CategoriesEmbeddingVectors(fastText)
 	if err != nil {
 		return err
 	}
