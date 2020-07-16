@@ -3,6 +3,7 @@
 
 # Cleanup item left from previous time setup.sh has been run
 rm fast_text.sqlite
+rm -r datasets
 
 # Download and build a fast and persistent fastText database
 curl https://dl.fbaipublicfiles.com/fasttext/vectors-english/wiki-news-300d-1M-subword.vec.zip --output zip_file.zip
