@@ -24,7 +24,7 @@ const (
 	maxK = 4
 )
 
-func buildIndex(db *sql.DB) *lshensemble.LshEnsemble {
+func buildIndex(db *sql.DB) (*lshensemble.LshEnsemble, error) {
 	var domainRecords []*lshensemble.DomainRecord
 
 	rows, err := db.Query(`
@@ -33,7 +33,7 @@ func buildIndex(db *sql.DB) *lshensemble.LshEnsemble {
 	ORDER BY distinct_count
 	`)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -43,11 +43,11 @@ func buildIndex(db *sql.DB) *lshensemble.LshEnsemble {
 		var minhash []byte
 
 		if err = rows.Scan(&columnID, &distinctCount, &minhash); err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 		sig, err := lshensemble.BytesToSig(minhash)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 		domainRecords = append(domainRecords, &lshensemble.DomainRecord{
 			Key:       columnID,
@@ -56,15 +56,15 @@ func buildIndex(db *sql.DB) *lshensemble.LshEnsemble {
 		})
 	}
 	if err := rows.Err(); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	index, err := lshensemble.BootstrapLshEnsembleEquiDepth(
 		numPart, mhSize, maxK, len(domainRecords), lshensemble.Recs2Chan(domainRecords))
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	return index
+	return index, nil
 }
 
 var joinabilityPage = template.Must(template.New("joinable-columns").Parse(`
@@ -87,21 +87,28 @@ var joinabilityPage = template.Must(template.New("joinable-columns").Parse(`
 </html>
 `))
 
+func serverError(w http.ResponseWriter, err error) {
+	http.Error(w, err.Error(), http.StatusInternalServerError)
+}
+
 func main() {
 	db, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// Build LSH Ensemble index
-	index := buildIndex(db)
+	index, err := buildIndex(db)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Println("built index")
 	db.Close()
 
-	// TODO: Use /joinable-columns/column-id
 	http.HandleFunc("/joinable-columns", func(w http.ResponseWriter, req *http.Request) {
 		db, err := sql.Open("sqlite3", databasePath)
 		if err != nil {
-			log.Fatal(err)
+			serverError(w, err)
+			return
 		}
 		defer db.Close()
 
@@ -113,7 +120,8 @@ func main() {
 		WHERE column_id = ?
 		`)
 		if err != nil {
-			log.Fatal(err)
+			serverError(w, err)
+			return
 		}
 		defer sketchSQL.Close()
 
@@ -126,20 +134,23 @@ func main() {
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.NotFound(w, req)
-				return
+			} else {
+				serverError(w, err)
 			}
-			log.Fatal(err)
+			return
 		}
 
 		nameSQL, err := db.Prepare(`SELECT name FROM metadata WHERE dataset_id = ?`)
 		if err != nil {
-			log.Fatal(err)
+			serverError(w, err)
+			return
 		}
 		defer nameSQL.Close()
 
 		var qDatasetName string
 		if err = nameSQL.QueryRow(qDatasetID).Scan(&qDatasetName); err != nil {
-			log.Fatal(err)
+			serverError(w, err)
+			return
 		}
 
 		type result struct {
@@ -159,7 +170,8 @@ func main() {
 
 		qSig, err := lshensemble.BytesToSig(qMinhash)
 		if err != nil {
-			log.Fatal(err)
+			serverError(w, err)
+			return
 		}
 		done := make(chan struct{})
 		defer close(done)
@@ -179,14 +191,18 @@ func main() {
 
 			err = sketchSQL.QueryRow(colID).Scan(&datasetID, &colName, &size, &minhash)
 			if err != nil {
-				log.Fatal(err)
+				serverError(w, err)
+				return
 			}
-			if err = nameSQL.QueryRow(datasetID).Scan(&datasetName); err != nil {
-				log.Fatal(err)
+			err = nameSQL.QueryRow(datasetID).Scan(&datasetName)
+			if err != nil {
+				serverError(w, err)
+				return
 			}
 			sig, err := lshensemble.BytesToSig(minhash)
 			if err != nil {
-				log.Fatal(err)
+				serverError(w, err)
+				return
 			}
 			containment := lshensemble.Containment(qSig, sig, qSize, size)
 			if containment < threshold {
@@ -194,7 +210,10 @@ func main() {
 			}
 			data.Results = append(data.Results, result{datasetName, colID, colName, containment})
 		}
-		joinabilityPage.Execute(w, data)
+		err = joinabilityPage.Execute(w, data)
+		if err != nil {
+			serverError(w, err)
+		}
 	})
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
