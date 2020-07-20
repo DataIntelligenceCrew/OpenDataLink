@@ -1,4 +1,4 @@
-package pkg
+package index
 
 import (
 	"database/sql"

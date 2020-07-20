@@ -1,6 +1,7 @@
 package main
 
 import (
+	"REU2020/index"
 	"database/sql"
 	"html/template"
 	"log"
@@ -12,60 +13,9 @@ import (
 
 const (
 	databasePath = "opendatalink.sqlite"
-	// Minhash parameters
-	mhSeed = 42
-	mhSize = 256
-	// Containment threshold
-	threshold = 0.5
-	// Number of LSH Ensemble partitions
-	numPart = 8
-	// Maximum value for the minhash LSH parameter K
-	// (number of hash functions per band).
-	maxK = 4
+	// Containment threshold for joinability index
+	joinabilityThreshold = 0.5
 )
-
-func buildIndex(db *sql.DB) (*lshensemble.LshEnsemble, error) {
-	var domainRecords []*lshensemble.DomainRecord
-
-	rows, err := db.Query(`
-	SELECT column_id, distinct_count, minhash
-	FROM column_sketches
-	ORDER BY distinct_count
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var columnID string
-		var distinctCount int
-		var minhash []byte
-
-		if err = rows.Scan(&columnID, &distinctCount, &minhash); err != nil {
-			return nil, err
-		}
-		sig, err := lshensemble.BytesToSig(minhash)
-		if err != nil {
-			return nil, err
-		}
-		domainRecords = append(domainRecords, &lshensemble.DomainRecord{
-			Key:       columnID,
-			Size:      distinctCount,
-			Signature: sig,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	index, err := lshensemble.BootstrapLshEnsembleEquiDepth(
-		numPart, mhSize, maxK, len(domainRecords), lshensemble.Recs2Chan(domainRecords))
-	if err != nil {
-		return nil, err
-	}
-	return index, nil
-}
 
 var templates = template.Must(template.ParseFiles("templates/joinable-columns.html"))
 
@@ -78,12 +28,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Build LSH Ensemble index
-	index, err := buildIndex(db)
+	joinabilityIndex, err := index.BuildJoinabilityIndex(db)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("built index")
+	log.Println("built joinability index")
 	db.Close()
 
 	http.HandleFunc("/joinable-columns", func(w http.ResponseWriter, req *http.Request) {
@@ -157,7 +106,7 @@ func main() {
 		}
 		done := make(chan struct{})
 		defer close(done)
-		results := index.Query(qSig, qSize, threshold, done)
+		results := joinabilityIndex.Query(qSig, qSize, joinabilityThreshold, done)
 
 		for key := range results {
 			colID := key.(string)
@@ -187,7 +136,7 @@ func main() {
 				return
 			}
 			containment := lshensemble.Containment(qSig, sig, qSize, size)
-			if containment < threshold {
+			if containment < joinabilityThreshold {
 				continue
 			}
 			data.Results = append(data.Results, result{datasetName, colID, colName, containment})

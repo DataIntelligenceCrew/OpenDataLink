@@ -1,8 +1,8 @@
-package pkg
+package index
 
 import (
-	"testing"
 	"database/sql"
+	"testing"
 )
 
 func TestBuildMetadataIndex(t *testing.T) {
@@ -11,7 +11,7 @@ func TestBuildMetadataIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	 if _, err := BuildMetadataIndex(openDataLinkDB); err != nil {
+	if _, err := BuildMetadataIndex(openDataLinkDB); err != nil {
 		t.Fatal(err)
 	}
 }
