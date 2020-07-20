@@ -77,7 +77,7 @@ var joinabilityPage = template.Must(template.New("joinable-columns").Parse(`
 <h3>Showing joinable tables on <i>{{.ColumnName}}</i></h3>
 {{range .Results}}
 	<p>
-	{{.DatasetName}} &gt; <a href="/joinable-columns?q={{.ColumnId}}">{{.ColumnName}}</a>
+	{{.DatasetName}} &gt; <a href="/joinable-columns?q={{.ColumnID}}">{{.ColumnName}}</a>
 	(containment: {{.Containment}})
 	</p>
 {{else}}
