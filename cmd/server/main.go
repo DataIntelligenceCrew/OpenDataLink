@@ -67,25 +67,7 @@ func buildIndex(db *sql.DB) (*lshensemble.LshEnsemble, error) {
 	return index, nil
 }
 
-var joinabilityPage = template.Must(template.New("joinable-columns").Parse(`
-<html>
-<head>
-<title>Open Data Link</title>
-</head>
-<body>
-<h2>{{.DatasetName}}</h2>
-<h3>Showing joinable tables on <i>{{.ColumnName}}</i></h3>
-{{range .Results}}
-	<p>
-	{{.DatasetName}} &gt; <a href="/joinable-columns?q={{.ColumnID}}">{{.ColumnName}}</a>
-	(containment: {{.Containment}})
-	</p>
-{{else}}
-	<p>No joinable tables.</p>
-{{end}}
-</body>
-</html>
-`))
+var templates = template.Must(template.ParseFiles("templates/joinable-columns.html"))
 
 func serverError(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -210,7 +192,7 @@ func main() {
 			}
 			data.Results = append(data.Results, result{datasetName, colID, colName, containment})
 		}
-		err = joinabilityPage.Execute(w, data)
+		err = templates.ExecuteTemplate(w, "joinable-columns.html", data)
 		if err != nil {
 			serverError(w, err)
 		}
