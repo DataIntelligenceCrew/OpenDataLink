@@ -1,4 +1,4 @@
-package index
+package main
 
 import (
 	"database/sql"
@@ -16,7 +16,7 @@ const (
 	maxK = 4
 )
 
-func BuildJoinabilityIndex(db *sql.DB) (*lshensemble.LshEnsemble, error) {
+func buildJoinabilityIndex(db *sql.DB) (*lshensemble.LshEnsemble, error) {
 	var domainRecords []*lshensemble.DomainRecord
 
 	rows, err := db.Query(`

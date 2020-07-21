@@ -9,7 +9,6 @@ metadata/
 # Binaries
 build_fast_text
 sketch_columns
-server
 
 # SQLite DB
 opendatalink.sqlite

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"REU2020/index"
 	"database/sql"
 	"html/template"
 	"log"
@@ -28,7 +27,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	joinabilityIndex, err := index.BuildJoinabilityIndex(db)
+	joinabilityIndex, err := buildJoinabilityIndex(db)
 	if err != nil {
 		log.Fatal(err)
 	}
