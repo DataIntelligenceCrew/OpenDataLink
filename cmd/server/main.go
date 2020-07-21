@@ -17,7 +17,7 @@ const (
 	joinabilityThreshold = 0.5
 )
 
-var templates = template.Must(template.ParseFiles("templates/joinable-columns.html"))
+var templates = template.Must(template.ParseFiles("template/joinable-columns.html"))
 
 func serverError(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), http.StatusInternalServerError)
