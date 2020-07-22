@@ -4,11 +4,12 @@
   <title>Open Data Link</title>
 </head>
 <body>
-  <h2>{{.DatasetName}}</h2>
+  <h2><a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a></h2>
   <h3>Showing joinable tables on <i>{{.ColumnName}}</i></h3>
   {{range .Results}}
     <p>
-    {{.DatasetName}} &gt; <a href="/joinable-columns?q={{.ColumnID}}">{{.ColumnName}}</a>
+    <a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a> &gt;
+    <a href="/joinable-columns?q={{.ColumnID}}">{{.ColumnName}}</a>
     (containment: {{.Containment}})
     </p>
   {{else}}

@@ -17,16 +17,46 @@ const (
 	joinabilityThreshold = 0.5
 )
 
-var templates = template.Must(template.ParseFiles("template/joinable-columns.html"))
+var templates = template.Must(template.ParseFiles(
+	"template/dataset.html",
+	"template/joinable-columns.html",
+))
 
 func serverError(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
 func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
-	err := templates.ExecuteTemplate(w, tmpl, &data)
+	err := templates.ExecuteTemplate(w, tmpl+".html", &data)
 	if err != nil {
 		serverError(w, err)
+	}
+}
+
+func datasetHandler(db *database.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		datasetID := req.URL.Path[len("/dataset/"):]
+
+		meta, err := db.Metadata(datasetID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.NotFound(w, req)
+			} else {
+				serverError(w, err)
+			}
+			return
+		}
+		cols, err := db.DatasetColumns(datasetID)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		data := struct {
+			*database.Metadata
+			Columns []*database.ColumnSketch
+		}{meta, cols}
+
+		renderTemplate(w, "dataset", &data)
 	}
 }
 
@@ -52,16 +82,19 @@ func joinableColumnsHandler(db *database.DB, index *lshensemble.LshEnsemble) htt
 			return
 		}
 		type searchResult struct {
+			DatasetID   string
 			DatasetName string
 			ColumnID    string
 			ColumnName  string
 			Containment float64
 		}
 		data := struct {
+			DatasetID   string
 			DatasetName string
 			ColumnName  string
 			Results     []searchResult
 		}{
+			DatasetID:   query.DatasetID,
 			DatasetName: qDatasetName,
 			ColumnName:  query.ColumnName,
 		}
@@ -88,10 +121,14 @@ func joinableColumnsHandler(db *database.DB, index *lshensemble.LshEnsemble) htt
 				continue
 			}
 			data.Results = append(data.Results, searchResult{
-				datasetName, result.ColumnID, result.ColumnName, containment,
+				result.DatasetID,
+				datasetName,
+				result.ColumnID,
+				result.ColumnName,
+				containment,
 			})
 		}
-		renderTemplate(w, "joinable-columns.html", &data)
+		renderTemplate(w, "joinable-columns", &data)
 	}
 }
 
@@ -108,6 +145,7 @@ func main() {
 	}
 	log.Println("built joinability index")
 
+	http.HandleFunc("/dataset/", datasetHandler(db))
 	http.HandleFunc("/joinable-columns", joinableColumnsHandler(db, joinabilityIndex))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))

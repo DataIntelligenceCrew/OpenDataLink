@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Open Data Link</title>
+</head>
+<body>
+  <h2>{{.Name}}</h2>
+  <p>Updated: {{.UpdatedAt}}</p>
+  <h3>Description</h3>
+  <p>{{.Description}}</p>
+  <h3>Publisher</h3>
+  <p>{{.Attribution}} (<a href="mailto:{{.ContactEmail}}">contact</a>)</p>
+  <h3>Categories</h3>
+  <p>{{.Categories}}</p>
+  <h3>Tags</h3>
+  <p>{{.Tags}}</p>
+  <h3>Source</h3>
+  <p><a href="{{.Permalink}}">{{.Permalink}}</a></p>
+  <h3>Columns</h3>
+  <p>Click a column to find tables joinable on that column.</p>
+  <ul>
+  {{range .Columns}}
+    <li><a href="/joinable-columns?q={{.ColumnID}}">{{.ColumnName}}</a></li>
+  {{end}}
+  </ul>
+</body>
+</html>

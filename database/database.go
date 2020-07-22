@@ -46,6 +46,38 @@ func (db *DB) ColumnSketch(columnID string) (*ColumnSketch, error) {
 	return &c, nil
 }
 
+func (db *DB) DatasetColumns(datasetID string) ([]*ColumnSketch, error) {
+	var cols []*ColumnSketch
+
+	rows, err := db.Query(`
+	SELECT column_id, column_name, distinct_count, minhash
+	FROM column_sketches
+	WHERE dataset_id = ?`, datasetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		c := ColumnSketch{DatasetID: datasetID}
+		var minhash []byte
+
+		err := rows.Scan(&c.ColumnID, &c.ColumnName, &c.DistinctCount, &minhash)
+		if err != nil {
+			return nil, err
+		}
+		c.Minhash, err = lshensemble.BytesToSig(minhash)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, &c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return cols, nil
+}
+
 type Metadata struct {
 	DatasetID    string
 	Name         string
