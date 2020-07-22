@@ -1,4 +1,4 @@
-module REU2020
+module opendatalink
 
 go 1.14
 

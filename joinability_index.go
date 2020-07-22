@@ -1,9 +1,8 @@
 package main
 
 import (
-	"database/sql"
-
 	"github.com/ekzhu/lshensemble"
+	"opendatalink/database"
 )
 
 const (
@@ -16,7 +15,7 @@ const (
 	maxK = 4
 )
 
-func buildJoinabilityIndex(db *sql.DB) (*lshensemble.LshEnsemble, error) {
+func buildJoinabilityIndex(db *database.DB) (*lshensemble.LshEnsemble, error) {
 	var domainRecords []*lshensemble.DomainRecord
 
 	rows, err := db.Query(`

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ekzhu/lshensemble"
 	_ "github.com/mattn/go-sqlite3"
+	"opendatalink/database"
 )
 
 const (
@@ -22,45 +23,16 @@ func serverError(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
-func main() {
-	db, err := sql.Open("sqlite3", databasePath)
+func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
+	err := templates.ExecuteTemplate(w, tmpl, &data)
 	if err != nil {
-		log.Fatal(err)
+		serverError(w, err)
 	}
-	joinabilityIndex, err := buildJoinabilityIndex(db)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("built joinability index")
-	db.Close()
+}
 
-	http.HandleFunc("/joinable-columns", func(w http.ResponseWriter, req *http.Request) {
-		db, err := sql.Open("sqlite3", databasePath)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		defer db.Close()
-
-		qColID := req.FormValue("q")
-
-		sketchSQL, err := db.Prepare(`
-		SELECT dataset_id, column_name, distinct_count, minhash
-		FROM column_sketches
-		WHERE column_id = ?
-		`)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		defer sketchSQL.Close()
-
-		var qDatasetID string
-		var qColName string
-		var qSize int
-		var qMinhash []byte
-
-		err = sketchSQL.QueryRow(qColID).Scan(&qDatasetID, &qColName, &qSize, &qMinhash)
+func joinableColumnsHandler(db *database.DB, index *lshensemble.LshEnsemble) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		query, err := db.ColumnSketch(req.FormValue("q"))
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.NotFound(w, req)
@@ -69,21 +41,17 @@ func main() {
 			}
 			return
 		}
+		done := make(chan struct{})
+		defer close(done)
+		results := index.Query(
+			query.Minhash, query.DistinctCount, joinabilityThreshold, done)
 
-		nameSQL, err := db.Prepare(`SELECT name FROM metadata WHERE dataset_id = ?`)
+		qDatasetName, err := db.DatasetName(query.DatasetID)
 		if err != nil {
 			serverError(w, err)
 			return
 		}
-		defer nameSQL.Close()
-
-		var qDatasetName string
-		if err = nameSQL.QueryRow(qDatasetID).Scan(&qDatasetName); err != nil {
-			serverError(w, err)
-			return
-		}
-
-		type result struct {
+		type searchResult struct {
 			DatasetName string
 			ColumnID    string
 			ColumnName  string
@@ -92,59 +60,55 @@ func main() {
 		data := struct {
 			DatasetName string
 			ColumnName  string
-			Results     []result
+			Results     []searchResult
 		}{
 			DatasetName: qDatasetName,
-			ColumnName:  qColName,
+			ColumnName:  query.ColumnName,
 		}
-
-		qSig, err := lshensemble.BytesToSig(qMinhash)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		done := make(chan struct{})
-		defer close(done)
-		results := joinabilityIndex.Query(qSig, qSize, joinabilityThreshold, done)
 
 		for key := range results {
 			colID := key.(string)
 			// Don't include query in results
-			if colID == qColID {
+			if colID == query.ColumnID {
 				continue
 			}
-			var datasetID string
-			var colName string
-			var size int
-			var minhash []byte
-			var datasetName string
-
-			err = sketchSQL.QueryRow(colID).Scan(&datasetID, &colName, &size, &minhash)
+			result, err := db.ColumnSketch(colID)
 			if err != nil {
 				serverError(w, err)
 				return
 			}
-			err = nameSQL.QueryRow(datasetID).Scan(&datasetName)
+			datasetName, err := db.DatasetName(result.DatasetID)
 			if err != nil {
 				serverError(w, err)
 				return
 			}
-			sig, err := lshensemble.BytesToSig(minhash)
-			if err != nil {
-				serverError(w, err)
-				return
-			}
-			containment := lshensemble.Containment(qSig, sig, qSize, size)
+			containment := lshensemble.Containment(
+				query.Minhash, result.Minhash, query.DistinctCount, result.DistinctCount)
 			if containment < joinabilityThreshold {
 				continue
 			}
-			data.Results = append(data.Results, result{datasetName, colID, colName, containment})
+			data.Results = append(data.Results, searchResult{
+				datasetName, result.ColumnID, result.ColumnName, containment,
+			})
 		}
-		err = templates.ExecuteTemplate(w, "joinable-columns.html", data)
-		if err != nil {
-			serverError(w, err)
-		}
-	})
+		renderTemplate(w, "joinable-columns.html", &data)
+	}
+}
+
+func main() {
+	db, err := database.New(databasePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	joinabilityIndex, err := buildJoinabilityIndex(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("built joinability index")
+
+	http.HandleFunc("/joinable-columns", joinableColumnsHandler(db, joinabilityIndex))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
