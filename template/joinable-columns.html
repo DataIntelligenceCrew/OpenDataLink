@@ -1,9 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Open Data Link</title>
-</head>
-<body>
+{{define "content"}}
   <h2><a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a></h2>
 
   <h3>Showing joinable tables on <i>{{.ColumnName}}</i></h3>
@@ -16,5 +11,4 @@
   {{else}}
     <p>No joinable tables.</p>
   {{end}}
-</body>
-</html>
+{{end}}

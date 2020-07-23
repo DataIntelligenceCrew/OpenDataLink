@@ -1,9 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Open Data Link</title>
-</head>
-<body>
+{{define "content"}}
   <h2>{{.Name}}</h2>
   <p>Updated: {{.UpdatedAt}}</p>
 
@@ -33,5 +28,4 @@
       <li><a href="/joinable-columns?q={{.ColumnID}}">{{.ColumnName}}</a></li>
     {{end}}
   </ul>
-</body>
-</html>
+{{end}}

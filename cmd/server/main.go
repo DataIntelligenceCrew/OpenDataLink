@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -17,52 +18,37 @@ const (
 	joinabilityThreshold = 0.5
 )
 
-var templates = template.Must(template.ParseFiles(
-	"template/dataset.html",
-	"template/joinable-columns.html",
-))
-
-func serverError(w http.ResponseWriter, err error) {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
+type Server struct {
+	db        *database.DB
+	templates map[string]*template.Template
 }
 
-func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
-	err := templates.ExecuteTemplate(w, tmpl+".html", &data)
+func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {
+	datasetID := req.URL.Path[len("/dataset/"):]
+
+	meta, err := s.db.Metadata(datasetID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, req)
+		} else {
+			serverError(w, err)
+		}
+		return
+	}
+	cols, err := s.db.DatasetColumns(datasetID)
 	if err != nil {
 		serverError(w, err)
+		return
 	}
+	s.servePage(w, "dataset", &struct {
+		*database.Metadata
+		Columns []*database.ColumnSketch
+	}{meta, cols})
 }
 
-func datasetHandler(db *database.DB) http.HandlerFunc {
+func (s *Server) joinableColumnsHandler(index *lshensemble.LshEnsemble) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		datasetID := req.URL.Path[len("/dataset/"):]
-
-		meta, err := db.Metadata(datasetID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				http.NotFound(w, req)
-			} else {
-				serverError(w, err)
-			}
-			return
-		}
-		cols, err := db.DatasetColumns(datasetID)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		data := struct {
-			*database.Metadata
-			Columns []*database.ColumnSketch
-		}{meta, cols}
-
-		renderTemplate(w, "dataset", &data)
-	}
-}
-
-func joinableColumnsHandler(db *database.DB, index *lshensemble.LshEnsemble) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		query, err := db.ColumnSketch(req.FormValue("q"))
+		query, err := s.db.ColumnSketch(req.FormValue("q"))
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.NotFound(w, req)
@@ -76,11 +62,6 @@ func joinableColumnsHandler(db *database.DB, index *lshensemble.LshEnsemble) htt
 		results := index.Query(
 			query.Minhash, query.DistinctCount, joinabilityThreshold, done)
 
-		qDatasetName, err := db.DatasetName(query.DatasetID)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
 		type searchResult struct {
 			DatasetID   string
 			DatasetName string
@@ -88,16 +69,7 @@ func joinableColumnsHandler(db *database.DB, index *lshensemble.LshEnsemble) htt
 			ColumnName  string
 			Containment float64
 		}
-		data := struct {
-			DatasetID   string
-			DatasetName string
-			ColumnName  string
-			Results     []searchResult
-		}{
-			DatasetID:   query.DatasetID,
-			DatasetName: qDatasetName,
-			ColumnName:  query.ColumnName,
-		}
+		var resultData []searchResult
 
 		for key := range results {
 			colID := key.(string)
@@ -105,12 +77,7 @@ func joinableColumnsHandler(db *database.DB, index *lshensemble.LshEnsemble) htt
 			if colID == query.ColumnID {
 				continue
 			}
-			result, err := db.ColumnSketch(colID)
-			if err != nil {
-				serverError(w, err)
-				return
-			}
-			datasetName, err := db.DatasetName(result.DatasetID)
+			result, err := s.db.ColumnSketch(colID)
 			if err != nil {
 				serverError(w, err)
 				return
@@ -120,7 +87,12 @@ func joinableColumnsHandler(db *database.DB, index *lshensemble.LshEnsemble) htt
 			if containment < joinabilityThreshold {
 				continue
 			}
-			data.Results = append(data.Results, searchResult{
+			datasetName, err := s.db.DatasetName(result.DatasetID)
+			if err != nil {
+				serverError(w, err)
+				return
+			}
+			resultData = append(resultData, searchResult{
 				result.DatasetID,
 				datasetName,
 				result.ColumnID,
@@ -128,8 +100,58 @@ func joinableColumnsHandler(db *database.DB, index *lshensemble.LshEnsemble) htt
 				containment,
 			})
 		}
-		renderTemplate(w, "joinable-columns", &data)
+		qDatasetName, err := s.db.DatasetName(query.DatasetID)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		s.servePage(w, "joinable-columns", &struct {
+			DatasetID   string
+			DatasetName string
+			ColumnName  string
+			Results     []searchResult
+		}{
+			query.DatasetID,
+			qDatasetName,
+			query.ColumnName,
+			resultData,
+		})
 	}
+}
+
+func serverError(w http.ResponseWriter, err error) {
+	log.Print(err)
+	w.WriteHeader(http.StatusInternalServerError)
+}
+
+func (s *Server) servePage(w http.ResponseWriter, page string, data interface{}) {
+	tmpl := s.templates[page]
+	if tmpl == nil {
+		serverError(w, fmt.Errorf("servePage: no such page: %s", page))
+		return
+	}
+	// TODO: Write to a temporary buffer
+	if err := tmpl.Execute(w, data); err != nil {
+		serverError(w, err)
+	}
+}
+
+func parseTemplates() (map[string]*template.Template, error) {
+	pages := []string{
+		"dataset",
+		"joinable-columns",
+	}
+	templates := make(map[string]*template.Template)
+
+	for _, page := range pages {
+		tmpl := "template/" + page + ".html"
+		var err error
+		templates[page], err = template.ParseFiles("template/base.html", tmpl)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return templates, nil
 }
 
 func main() {
@@ -139,14 +161,20 @@ func main() {
 	}
 	defer db.Close()
 
+	templates, err := parseTemplates()
+	if err != nil {
+		log.Fatal(err)
+	}
 	joinabilityIndex, err := buildJoinabilityIndex(db)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("built joinability index")
 
-	http.HandleFunc("/dataset/", datasetHandler(db))
-	http.HandleFunc("/joinable-columns", joinableColumnsHandler(db, joinabilityIndex))
+	s := Server{db, templates}
+
+	http.HandleFunc("/dataset/", s.handleDataset)
+	http.HandleFunc("/joinable-columns", s.joinableColumnsHandler(joinabilityIndex))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
