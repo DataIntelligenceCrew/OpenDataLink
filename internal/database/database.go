@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"strings"
 
 	"github.com/ekzhu/lshensemble"
 )
@@ -85,13 +86,14 @@ type Metadata struct {
 	Attribution  string
 	ContactEmail string
 	UpdatedAt    string
-	Categories   string
-	Tags         string
+	Categories   []string
+	Tags         []string
 	Permalink    string
 }
 
 func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 	m := Metadata{DatasetID: datasetID}
+	var categories, tags string
 
 	err := db.QueryRow(`
 	SELECT
@@ -110,12 +112,15 @@ func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 		&m.Attribution,
 		&m.ContactEmail,
 		&m.UpdatedAt,
-		&m.Categories,
-		&m.Tags,
+		&categories,
+		&tags,
 		&m.Permalink)
 	if err != nil {
 		return nil, err
 	}
+	m.Categories = strings.Split(categories, ",")
+	m.Tags = strings.Split(tags, ",")
+
 	return &m, nil
 }
 
