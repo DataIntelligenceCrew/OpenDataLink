@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/ekzhu/lshensemble"
+	_ "github.com/mattn/go-sqlite3" // Provides the driver for our SQLite database
 )
 
 // DB is a wrapper of the opendatalink SQLite3 database
@@ -136,27 +137,6 @@ func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 	return &m, nil
 }
 
-// SplitCategories splits categories into a []string
-func SplitCategories(categories string) []string {
-	return strings.Split(categories, ",")
-}
-
-// SplitTags splits tags into a []string
-func SplitTags(tags string) []string {
-	return strings.Split(tags, ",")
-}
-
-// DatasetName returns the name of the dataset given its ID
-func (db *DB) DatasetName(datasetID string) (string, error) {
-	var name string
-	err := db.QueryRow(`
-	SELECT name FROM metadata WHERE dataset_id = ?`, datasetID).Scan(&name)
-	if err != nil {
-		return "", err
-	}
-	return name, nil
-}
-
 // MetadataRows retreives all data in the Metadata table.
 func (db *DB) MetadataRows() (*[]Metadata, error) {
 	rows, err := db.Query("SELECT * from Metadata;")
@@ -191,6 +171,27 @@ func (db *DB) MetadataRows() (*[]Metadata, error) {
 	}
 
 	return &metadataRows, nil
+}
+
+// SplitCategories splits categories into a []string
+func SplitCategories(categories string) []string {
+	return strings.Split(categories, ",")
+}
+
+// SplitTags splits tags into a []string
+func SplitTags(tags string) []string {
+	return strings.Split(tags, ",")
+}
+
+// DatasetName returns the name of the dataset given its ID
+func (db *DB) DatasetName(datasetID string) (string, error) {
+	var name string
+	err := db.QueryRow(`
+	SELECT name FROM metadata WHERE dataset_id = ?`, datasetID).Scan(&name)
+	if err != nil {
+		return "", err
+	}
+	return name, nil
 }
 
 // // NameClean returns a cleaned version of Metadata.Name()
