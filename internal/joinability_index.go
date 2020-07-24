@@ -1,8 +1,8 @@
-package main
+package internal
 
 import (
 	"github.com/ekzhu/lshensemble"
-	"opendatalink/database"
+	"opendatalink/internal/database"
 )
 
 const (

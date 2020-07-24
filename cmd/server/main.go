@@ -8,7 +8,7 @@ import (
 
 	"github.com/ekzhu/lshensemble"
 	_ "github.com/mattn/go-sqlite3"
-	"opendatalink/database"
+	"opendatalink/internal/database"
 )
 
 const (
