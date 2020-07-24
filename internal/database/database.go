@@ -79,8 +79,10 @@ func (db *DB) DatasetColumns(datasetID string) ([]*ColumnSketch, error) {
 	return cols, nil
 }
 
+// Metadata is a row retrieved form the 'Metadata' table in
+// 'opendatalink.sqlite'
 type Metadata struct {
-	DatasetID    string
+	DatasetID    string // four-by-four (e.g. "ad4f-f5gs")
 	Name         string
 	Description  string
 	Attribution  string
@@ -88,7 +90,7 @@ type Metadata struct {
 	UpdatedAt    string
 	Categories   []string
 	Tags         []string
-	Permalink    string
+	Permalink    string // Permanent link to the dataset
 }
 
 func (db *DB) Metadata(datasetID string) (*Metadata, error) {
@@ -119,13 +121,23 @@ func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 		return nil, err
 	}
 	if categories != "" {
-		m.Categories = strings.Split(categories, ",")
+		m.Categories = SplitCategories(categories)
 	}
 	if tags != "" {
-		m.Tags = strings.Split(tags, ",")
+		m.Tags = SplitTags(tags)
 	}
 
 	return &m, nil
+}
+
+// SplitCategories splits categories into a []string
+func SplitCategories(categories string) []string {
+	return strings.Split(categories, ",")
+}
+
+// SplitTags splits tags into a []string
+func SplitTags(tags string) []string {
+	return strings.Split(tags, ",")
 }
 
 func (db *DB) DatasetName(datasetID string) (string, error) {
@@ -137,3 +149,54 @@ func (db *DB) DatasetName(datasetID string) (string, error) {
 	}
 	return name, nil
 }
+
+// MetadataRows retreives all data in the Metadata table.
+func MetadataRows(db *sql.DB) (*[]Metadata, error) {
+	rows, err := db.Query("SELECT * from Metadata;")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var metadataRows []Metadata
+	for isNext := rows.Next(); isNext; isNext = rows.Next() {
+		var metadata Metadata
+		var categories string
+		var tags string
+		if err := rows.Scan(&metadata.DatasetID, &metadata.Name,
+			&metadata.Description, &metadata.Attribution,
+			&metadata.ContactEmail, &metadata.UpdatedAt,
+			&categories, &tags, &metadata.Permalink); err != nil {
+			return nil, err
+		}
+
+		if categories != "" {
+			metadata.Categories = SplitCategories(categories)
+		}
+		if tags != "" {
+			metadata.Tags = SplitTags(tags)
+		}
+		
+		metadataRows = append(metadataRows, metadata)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return &metadataRows, nil
+}
+
+// // NameClean returns a cleaned version of Metadata.Name()
+// func (metadata *Metadata) NameClean() []string {
+// 	return strings.Fields(*metadata.Name)
+// }
+
+// // DescriptionClean returns a cleaned version of Metadata.Description()
+// func (metadata *Metadata) DescriptionClean() []string {
+// 	return strings.Fields(*metadata.Description)
+// }
+
+// // AttributionClean returns a cleaned version of Metadata.Attribution()
+// func (metadata *Metadata) AttributionClean() []string {
+// 	return strings.Fields(*metadata.Attribution)
+// }
