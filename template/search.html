@@ -1,0 +1,10 @@
+{{define "content"}}
+  <h2>Search results</h2>
+  <p>Showing {{.NumResults}} results.</p>
+
+  {{range .Results}}
+    <p><a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a></p>
+  {{end}}
+{{end}}
+
+{{define "search_query"}}{{.Query}}{{end}}

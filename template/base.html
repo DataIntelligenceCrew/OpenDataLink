@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Open Data Link</title>
+</head>
+<body>
+  <p><a href="/">Open Data Link</a></p>
+
+  <form action="/search">
+    <input name="q" placeholder="Search" value="{{block "search_query" .}}{{end}}">
+  </form>
+
+  {{template "content" .}}
+</body>
+</html>

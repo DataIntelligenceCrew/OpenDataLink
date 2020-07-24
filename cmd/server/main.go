@@ -23,6 +23,53 @@ type Server struct {
 	templates map[string]*template.Template
 }
 
+func (s *Server) handleIndex(w http.ResponseWriter, req *http.Request) {
+	s.servePage(w, "index", nil)
+}
+
+func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
+	query := req.FormValue("q")
+
+	type searchResult struct {
+		DatasetID   string
+		DatasetName string
+	}
+	var results []*searchResult
+
+	rows, err := s.db.Query(`
+	SELECT dataset_id, name
+	FROM metadata
+	WHERE name || description LIKE ?`, "%"+query+"%")
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var res searchResult
+		if err = rows.Scan(&res.DatasetID, &res.DatasetName); err != nil {
+			serverError(w, err)
+			return
+		}
+		results = append(results, &res)
+	}
+	if err := rows.Err(); err != nil {
+		serverError(w, err)
+		return
+	}
+
+	s.servePage(w, "search", &struct {
+		Query      string
+		NumResults int
+		Results    []*searchResult
+	}{
+		query,
+		len(results),
+		results,
+	})
+}
+
 func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {
 	datasetID := req.URL.Path[len("/dataset/"):]
 
@@ -69,7 +116,7 @@ func (s *Server) joinableColumnsHandler(index *lshensemble.LshEnsemble) http.Han
 			ColumnName  string
 			Containment float64
 		}
-		var resultData []searchResult
+		var resultData []*searchResult
 
 		for key := range results {
 			colID := key.(string)
@@ -92,7 +139,7 @@ func (s *Server) joinableColumnsHandler(index *lshensemble.LshEnsemble) http.Han
 				serverError(w, err)
 				return
 			}
-			resultData = append(resultData, searchResult{
+			resultData = append(resultData, &searchResult{
 				result.DatasetID,
 				datasetName,
 				result.ColumnID,
@@ -109,7 +156,7 @@ func (s *Server) joinableColumnsHandler(index *lshensemble.LshEnsemble) http.Han
 			DatasetID   string
 			DatasetName string
 			ColumnName  string
-			Results     []searchResult
+			Results     []*searchResult
 		}{
 			query.DatasetID,
 			qDatasetName,
@@ -121,7 +168,7 @@ func (s *Server) joinableColumnsHandler(index *lshensemble.LshEnsemble) http.Han
 
 func serverError(w http.ResponseWriter, err error) {
 	log.Print(err)
-	w.WriteHeader(http.StatusInternalServerError)
+	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
 func (s *Server) servePage(w http.ResponseWriter, page string, data interface{}) {
@@ -138,6 +185,8 @@ func (s *Server) servePage(w http.ResponseWriter, page string, data interface{})
 
 func parseTemplates() (map[string]*template.Template, error) {
 	pages := []string{
+		"index",
+		"search",
 		"dataset",
 		"joinable-columns",
 	}
@@ -173,6 +222,8 @@ func main() {
 
 	s := Server{db, templates}
 
+	http.HandleFunc("/", s.handleIndex)
+	http.HandleFunc("/search", s.handleSearch)
 	http.HandleFunc("/dataset/", s.handleDataset)
 	http.HandleFunc("/joinable-columns", s.joinableColumnsHandler(joinabilityIndex))
 

@@ -118,8 +118,12 @@ func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 	if err != nil {
 		return nil, err
 	}
-	m.Categories = strings.Split(categories, ",")
-	m.Tags = strings.Split(tags, ",")
+	if categories != "" {
+		m.Categories = strings.Split(categories, ",")
+	}
+	if tags != "" {
+		m.Tags = strings.Split(tags, ",")
+	}
 
 	return &m, nil
 }
