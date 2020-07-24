@@ -7,10 +7,12 @@ import (
 	"github.com/ekzhu/lshensemble"
 )
 
+// DB is a wrapper of the opendatalink SQLite3 database
 type DB struct {
 	*sql.DB
 }
 
+// New returns a handle to the database give a path to its file
 func New(databasePath string) (*DB, error) {
 	db, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
@@ -19,6 +21,7 @@ func New(databasePath string) (*DB, error) {
 	return &DB{db}, nil
 }
 
+// ColumnSketch represents a row in the column_sketches table
 type ColumnSketch struct {
 	ColumnID      string
 	DatasetID     string
@@ -27,6 +30,7 @@ type ColumnSketch struct {
 	Minhash       []uint64
 }
 
+// ColumnSketch returns the ColumnSketch of the given column
 func (db *DB) ColumnSketch(columnID string) (*ColumnSketch, error) {
 	c := ColumnSketch{ColumnID: columnID}
 	var minhash []byte
@@ -47,6 +51,7 @@ func (db *DB) ColumnSketch(columnID string) (*ColumnSketch, error) {
 	return &c, nil
 }
 
+// DatasetColumns returns rows which describe the columns of dataset_id
 func (db *DB) DatasetColumns(datasetID string) ([]*ColumnSketch, error) {
 	var cols []*ColumnSketch
 
@@ -93,6 +98,7 @@ type Metadata struct {
 	Permalink    string // Permanent link to the dataset
 }
 
+// Metadata returns a row given the row's primary key, dataset_id
 func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 	m := Metadata{DatasetID: datasetID}
 	var categories, tags string
@@ -140,6 +146,7 @@ func SplitTags(tags string) []string {
 	return strings.Split(tags, ",")
 }
 
+// DatasetName returns the name of the dataset given its ID
 func (db *DB) DatasetName(datasetID string) (string, error) {
 	var name string
 	err := db.QueryRow(`
@@ -151,7 +158,7 @@ func (db *DB) DatasetName(datasetID string) (string, error) {
 }
 
 // MetadataRows retreives all data in the Metadata table.
-func MetadataRows(db *sql.DB) (*[]Metadata, error) {
+func (db *DB) MetadataRows() (*[]Metadata, error) {
 	rows, err := db.Query("SELECT * from Metadata;")
 	if err != nil {
 		return nil, err
@@ -176,7 +183,7 @@ func MetadataRows(db *sql.DB) (*[]Metadata, error) {
 		if tags != "" {
 			metadata.Tags = SplitTags(tags)
 		}
-		
+
 		metadataRows = append(metadataRows, metadata)
 	}
 	if err := rows.Err(); err != nil {
