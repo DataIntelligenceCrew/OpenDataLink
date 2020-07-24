@@ -19,8 +19,10 @@ const (
 )
 
 type Server struct {
-	db        *database.DB
-	templates map[string]*template.Template
+	db                   *database.DB
+	templates            map[string]*template.Template
+	joinabilityThreshold float64
+	joinabilityIndex     *lshensemble.LshEnsemble
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, req *http.Request) {
@@ -93,77 +95,75 @@ func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {
 	}{meta, cols})
 }
 
-func (s *Server) joinableColumnsHandler(index *lshensemble.LshEnsemble) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		query, err := s.db.ColumnSketch(req.FormValue("q"))
-		if err != nil {
-			if err == sql.ErrNoRows {
-				http.NotFound(w, req)
-			} else {
-				serverError(w, err)
-			}
-			return
+func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request) {
+	query, err := s.db.ColumnSketch(req.FormValue("q"))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, req)
+		} else {
+			serverError(w, err)
 		}
-		done := make(chan struct{})
-		defer close(done)
-		results := index.Query(
-			query.Minhash, query.DistinctCount, joinabilityThreshold, done)
+		return
+	}
+	done := make(chan struct{})
+	defer close(done)
+	results := s.joinabilityIndex.Query(
+		query.Minhash, query.DistinctCount, s.joinabilityThreshold, done)
 
-		type searchResult struct {
-			DatasetID   string
-			DatasetName string
-			ColumnID    string
-			ColumnName  string
-			Containment float64
-		}
-		var resultData []*searchResult
+	type searchResult struct {
+		DatasetID   string
+		DatasetName string
+		ColumnID    string
+		ColumnName  string
+		Containment float64
+	}
+	var resultData []*searchResult
 
-		for key := range results {
-			colID := key.(string)
-			// Don't include query in results
-			if colID == query.ColumnID {
-				continue
-			}
-			result, err := s.db.ColumnSketch(colID)
-			if err != nil {
-				serverError(w, err)
-				return
-			}
-			containment := lshensemble.Containment(
-				query.Minhash, result.Minhash, query.DistinctCount, result.DistinctCount)
-			if containment < joinabilityThreshold {
-				continue
-			}
-			datasetName, err := s.db.DatasetName(result.DatasetID)
-			if err != nil {
-				serverError(w, err)
-				return
-			}
-			resultData = append(resultData, &searchResult{
-				result.DatasetID,
-				datasetName,
-				result.ColumnID,
-				result.ColumnName,
-				containment,
-			})
+	for key := range results {
+		colID := key.(string)
+		// Don't include query in results
+		if colID == query.ColumnID {
+			continue
 		}
-		qDatasetName, err := s.db.DatasetName(query.DatasetID)
+		result, err := s.db.ColumnSketch(colID)
 		if err != nil {
 			serverError(w, err)
 			return
 		}
-		s.servePage(w, "joinable-columns", &struct {
-			DatasetID   string
-			DatasetName string
-			ColumnName  string
-			Results     []*searchResult
-		}{
-			query.DatasetID,
-			qDatasetName,
-			query.ColumnName,
-			resultData,
+		containment := lshensemble.Containment(
+			query.Minhash, result.Minhash, query.DistinctCount, result.DistinctCount)
+		if containment < s.joinabilityThreshold {
+			continue
+		}
+		datasetName, err := s.db.DatasetName(result.DatasetID)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		resultData = append(resultData, &searchResult{
+			result.DatasetID,
+			datasetName,
+			result.ColumnID,
+			result.ColumnName,
+			containment,
 		})
 	}
+	qDatasetName, err := s.db.DatasetName(query.DatasetID)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	s.servePage(w, "joinable-columns", &struct {
+		DatasetID   string
+		DatasetName string
+		ColumnName  string
+		Results     []*searchResult
+	}{
+		query.DatasetID,
+		qDatasetName,
+		query.ColumnName,
+		resultData,
+	})
 }
 
 func serverError(w http.ResponseWriter, err error) {
@@ -214,18 +214,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	joinabilityIndex, err := buildJoinabilityIndex(db)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("built joinability index")
 
-	s := Server{db, templates}
+	s := Server{
+		db:                   db,
+		templates:            templates,
+		joinabilityThreshold: joinabilityThreshold,
+		joinabilityIndex:     joinabilityIndex,
+	}
 
 	http.HandleFunc("/", s.handleIndex)
 	http.HandleFunc("/search", s.handleSearch)
 	http.HandleFunc("/dataset/", s.handleDataset)
-	http.HandleFunc("/joinable-columns", s.joinableColumnsHandler(joinabilityIndex))
+	http.HandleFunc("/joinable-columns", s.handleJoinableColumns)
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
