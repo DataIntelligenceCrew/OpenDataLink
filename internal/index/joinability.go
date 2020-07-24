@@ -1,4 +1,4 @@
-package internal
+package index
 
 import (
 	"github.com/ekzhu/lshensemble"
@@ -15,7 +15,7 @@ const (
 	maxK = 4
 )
 
-func buildJoinabilityIndex(db *database.DB) (*lshensemble.LshEnsemble, error) {
+func BuildJoinabilityIndex(db *database.DB) (*lshensemble.LshEnsemble, error) {
 	var domainRecords []*lshensemble.DomainRecord
 
 	rows, err := db.Query(`

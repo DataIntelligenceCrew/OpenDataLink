@@ -10,6 +10,7 @@ import (
 	"github.com/ekzhu/lshensemble"
 	_ "github.com/mattn/go-sqlite3"
 	"opendatalink/internal/database"
+	"opendatalink/internal/index"
 )
 
 const (
@@ -215,7 +216,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	joinabilityIndex, err := buildJoinabilityIndex(db)
+	joinabilityIndex, err := index.BuildJoinabilityIndex(db)
 	if err != nil {
 		log.Fatal(err)
 	}
