@@ -4,9 +4,13 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/justinfargnoli/go-fasttext"
 	"github.com/ekzhu/lshensemble"
 	_ "github.com/mattn/go-sqlite3" // Provides the driver for our SQLite database
 )
+
+// TestPath is the path to the sqlite database when testing the program
+var TestPath = "~/go/src/opendatalink/test/opendatalink.sqlite"
 
 // DB is a wrapper of the opendatalink SQLite3 database
 type DB struct {
@@ -99,6 +103,42 @@ type Metadata struct {
 	Permalink    string // Permanent link to the dataset
 }
 
+// DatasetName returns the name of the dataset given its ID
+func (db *DB) DatasetName(datasetID string) (string, error) {
+	var name string
+	err := db.QueryRow(`
+	SELECT name FROM metadata WHERE dataset_id = ?`, datasetID).Scan(&name)
+	if err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+// NameSplit returns a split version of Metadata.Name()
+func (metadata *Metadata) NameSplit() []string {
+	return strings.Fields(metadata.Name)
+}
+
+// DescriptionSplit returns a split version of Metadata.Description()
+func (metadata *Metadata) DescriptionSplit() []string {
+	return strings.Fields(metadata.Description)
+}
+
+// AttributionSplit returns a split version of Metadata.Attribution()
+func (metadata *Metadata) AttributionSplit() []string {
+	return strings.Fields(metadata.Attribution)
+}
+
+// CategoriesSplit splits categories into a []string
+func CategoriesSplit(categories string) []string {
+	return strings.Split(categories, ",")
+}
+
+// TagsSplit splits tags into a []string
+func TagsSplit(tags string) []string {
+	return strings.Split(tags, ",")
+}
+
 // Metadata returns a row given the row's primary key, dataset_id
 func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 	m := Metadata{DatasetID: datasetID}
@@ -128,10 +168,10 @@ func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 		return nil, err
 	}
 	if categories != "" {
-		m.Categories = SplitCategories(categories)
+		m.Categories = CategoriesSplit(categories)
 	}
 	if tags != "" {
-		m.Tags = SplitTags(tags)
+		m.Tags = TagsSplit(tags)
 	}
 
 	return &m, nil
@@ -158,10 +198,10 @@ func (db *DB) MetadataRows() (*[]Metadata, error) {
 		}
 
 		if categories != "" {
-			metadata.Categories = SplitCategories(categories)
+			metadata.Categories = CategoriesSplit(categories)
 		}
 		if tags != "" {
-			metadata.Tags = SplitTags(tags)
+			metadata.Tags = TagsSplit(tags)
 		}
 
 		metadataRows = append(metadataRows, metadata)
@@ -173,38 +213,89 @@ func (db *DB) MetadataRows() (*[]Metadata, error) {
 	return &metadataRows, nil
 }
 
-// SplitCategories splits categories into a []string
-func SplitCategories(categories string) []string {
-	return strings.Split(categories, ",")
-}
 
-// SplitTags splits tags into a []string
-func SplitTags(tags string) []string {
-	return strings.Split(tags, ",")
-}
-
-// DatasetName returns the name of the dataset given its ID
-func (db *DB) DatasetName(datasetID string) (string, error) {
-	var name string
-	err := db.QueryRow(`
-	SELECT name FROM metadata WHERE dataset_id = ?`, datasetID).Scan(&name)
+// NameEmbeddingVector returns the embedding vector which represents
+// Metadata.Name
+// []float64 == nil when an embedding vector does not exist for Metadata.Name
+func (metadata *Metadata) NameEmbeddingVector(fastText *fasttext.FastText) ([]float64, error) {
+	nameSplit := metadata.NameSplit()
+	embeddingVector, err := fastText.MultiWordEmbeddingVector(nameSplit)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return name, nil
+
+	return embeddingVector, nil
 }
 
-// // NameClean returns a cleaned version of Metadata.Name()
-// func (metadata *Metadata) NameClean() []string {
-// 	return strings.Fields(*metadata.Name)
-// }
+// DescriptionEmbeddingVectors returns an array of embedding vectors which
+// represent the words of Metadata.Description
+// [][]float64 == nil when an embedding vector does not exist for
+// Metadata.Description
+func (metadata *Metadata) DescriptionEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
+	descriptionSplit := metadata.DescriptionSplit()
+	var descriptionEmbeddingVector [][]float64
+	for _, v := range descriptionSplit {
+		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
+		if err != nil {
+			return nil, err
+		}
+		descriptionEmbeddingVector =
+			append(descriptionEmbeddingVector, wordEmbeddingVector)
+	}
 
-// // DescriptionClean returns a cleaned version of Metadata.Description()
-// func (metadata *Metadata) DescriptionClean() []string {
-// 	return strings.Fields(*metadata.Description)
-// }
+	return descriptionEmbeddingVector, nil
+}
 
-// // AttributionClean returns a cleaned version of Metadata.Attribution()
-// func (metadata *Metadata) AttributionClean() []string {
-// 	return strings.Fields(*metadata.Attribution)
-// }
+// AttributionEmbeddingVectors returns an array of embedding vectors which
+// represent the words of Metadata.Attribution
+// [][]float64 == nil when an embedding vector does not exist for
+// Metadata.Description
+func (metadata *Metadata) AttributionEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
+	attributionSplit := metadata.AttributionSplit()
+	var attributionEmbeddingVector [][]float64
+	for _, v := range attributionSplit {
+		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
+		if err != nil {
+			return nil, err
+		}
+		attributionEmbeddingVector =
+			append(attributionEmbeddingVector, wordEmbeddingVector)
+	}
+
+	return attributionEmbeddingVector, nil
+}
+
+// CategoriesEmbeddingVectors returns an array of embedding vectors which
+// represent the words of Metadata.Categories
+// [][]float64 == nil when an embedding vector does not exist for
+// Metadata.Description
+func (metadata *Metadata) CategoriesEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
+	var categoriesEmbeddingVector [][]float64
+	for _, v := range metadata.Categories {
+		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
+		if err != nil {
+			return nil, err
+		}
+		categoriesEmbeddingVector =
+			append(categoriesEmbeddingVector, wordEmbeddingVector)
+	}
+
+	return categoriesEmbeddingVector, nil
+}
+
+// TagsEmbeddingVectors returns an array of embedding vectors which
+// represent the words of Metadata.Tags
+// [][]float64 == nil when an embedding vector does not exist for
+// Metadata.Description
+func (metadata *Metadata) TagsEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
+	var tagsEmbeddingVector [][]float64
+	for _, v := range metadata.Tags {
+		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
+		if err != nil {
+			return nil, err
+		}
+		tagsEmbeddingVector = append(tagsEmbeddingVector, wordEmbeddingVector)
+	}
+
+	return tagsEmbeddingVector, nil
+}

@@ -2,8 +2,6 @@ package database
 
 import "testing"
 
-var databasePath = "/Users/justinfargnoli/go/src/opendatalink/test/opendatalink.sqlite"
-
 func TestNew(t *testing.T) {
 	_, err := New(databasePath)
 	if err != nil {
