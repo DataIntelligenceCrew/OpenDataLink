@@ -2,6 +2,7 @@ package horizontal
 
 import (
 	"log"
+	"os"
 
 	"opendatalink/internal/database"
 
@@ -72,7 +73,12 @@ func (indexBuilder IndexBuilder) InsertZip(embeddingVectors *[][]float64, IDs *[
 
 // InsertMetadata adds metadataRows to a simhashlsh.CosineLsh index
 func (indexBuilder IndexBuilder) InsertMetadata(metadataRows *[]database.Metadata) error {
-	fastText := fasttext.New("fast_text.sqlite")
+	fastText := fasttext.New(os.Getenv("FAST_TEXT_DB"))
+	defer func() {
+		if err := fastText.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	for _, v := range *metadataRows {
 		if err := InsertName(indexBuilder, fastText, &v); err != nil {

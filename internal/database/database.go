@@ -2,15 +2,16 @@ package database
 
 import (
 	"database/sql"
+	"os"
 	"strings"
 
-	"github.com/justinfargnoli/go-fasttext"
 	"github.com/ekzhu/lshensemble"
+	"github.com/justinfargnoli/go-fasttext"
 	_ "github.com/mattn/go-sqlite3" // Provides the driver for our SQLite database
 )
 
 // TestPath is the path to the sqlite database when testing the program
-var TestPath = "~/go/src/opendatalink/test/opendatalink.sqlite"
+var TestPath = os.Getenv("OPEN_DATA_LINK_DB")
 
 // DB is a wrapper of the opendatalink SQLite3 database
 type DB struct {
@@ -179,7 +180,7 @@ func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 
 // MetadataRows retreives all data in the Metadata table.
 func (db *DB) MetadataRows() (*[]Metadata, error) {
-	rows, err := db.Query("SELECT * from Metadata;")
+	rows, err := db.Query("SELECT * from metadata;")
 	if err != nil {
 		return nil, err
 	}

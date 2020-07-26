@@ -11,5 +11,7 @@ build_fast_text
 sketch_columns
 
 # SQLite DB
-opendatalink.sqlite
-fast_text.sqlite
+opendatalink.sqlite3
+opendatalink.sqlite3-journal
+fast_text.sqlite3
+fast_text.sqlite3-journal
