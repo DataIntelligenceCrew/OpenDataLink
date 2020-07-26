@@ -214,7 +214,6 @@ func (db *DB) MetadataRows() (*[]Metadata, error) {
 	return &metadataRows, nil
 }
 
-
 // NameEmbeddingVector returns the embedding vector which represents
 // Metadata.Name
 // []float64 == nil when an embedding vector does not exist for Metadata.Name
