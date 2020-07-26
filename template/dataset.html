@@ -3,7 +3,9 @@
   <p>Updated: {{.UpdatedAt}}</p>
 
   <h3>Description</h3>
-  <p>{{.Description}}</p>
+  {{range .Description | lines}}
+    <p>{{.}}</p>
+  {{end}}
 
   <h3>Publisher</h3>
   <p>{{.Attribution}} (<a href="mailto:{{.ContactEmail}}">contact</a>)</p>

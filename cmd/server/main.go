@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/ekzhu/lshensemble"
 	_ "github.com/mattn/go-sqlite3"
@@ -195,12 +196,15 @@ func parseTemplates() (map[string]*template.Template, error) {
 	templates := make(map[string]*template.Template)
 
 	for _, page := range pages {
-		tmpl := "template/" + page + ".html"
-		var err error
-		templates[page], err = template.ParseFiles("template/base.html", tmpl)
+		t, err := template.New("base.html").Funcs(template.FuncMap{
+			"lines": func(text string) []string {
+				return strings.Split(text, "\n")
+			},
+		}).ParseFiles("template/base.html", "template/"+page+".html")
 		if err != nil {
 			return nil, err
 		}
+		templates[page] = t
 	}
 	return templates, nil
 }
