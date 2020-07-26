@@ -54,21 +54,33 @@ func (indexBuilder IndexBuilder) ToIndex() Index {
 }
 
 // Insert adds the embeddingVector and id to the index
-func (indexBuilder IndexBuilder) Insert(embeddingVector []float64, ID string) {
-	indexBuilder.index.Insert(embeddingVector, ID)
+func (indexBuilder IndexBuilder) Insert(point Point) {
+	indexBuilder.index.Insert(point.EmbeddingVector, point.ID())
 }
 
 // InsertZip zips the embeddingVectors and IDs array into a one dimensional
 // array of (embeddingVector []float64, ID string) tuples which are then added
 // to the index
-func (indexBuilder IndexBuilder) InsertZip(embeddingVectors *[][]float64, IDs *[]string) {
+func (indexBuilder IndexBuilder) InsertZip(embeddingVectors *[][]float64, datasetID string, IDs *[]string) {
 	if len(*embeddingVectors) != len(*IDs) {
 		log.Fatal("len(embeddingVectors) != len(IDs)")
 	}
 
 	for i := range *embeddingVectors {
-		indexBuilder.Insert((*embeddingVectors)[i], (*IDs)[i])
+		indexBuilder.Insert(Point{(*embeddingVectors)[i], datasetID, (*IDs)[i]})
 	}
+}
+
+// Point is a point in the simhashlsh.CosineLsh Index
+type Point struct {
+	EmbeddingVector []float64
+	DatasetID       string
+	Value           string
+}
+
+// ID returns the ID to be passed to the third parameter of Index.Insert()
+func (point *Point) ID() string {
+	return point.DatasetID + point.Value
 }
 
 // InsertMetadata adds metadataRows to a simhashlsh.CosineLsh index
@@ -108,7 +120,7 @@ func (indexBuilder IndexBuilder) InsertName(fastText *fasttext.FastText, metadat
 		return err
 	}
 	if nameEmbeddingVector != nil {
-		indexBuilder.Insert(nameEmbeddingVector, metadata.Name)
+		indexBuilder.Insert(Point{nameEmbeddingVector, metadata.DatasetID, metadata.Name})
 	}
 	return nil
 }
@@ -122,7 +134,7 @@ func (indexBuilder IndexBuilder) InsertDescription(fastText *fasttext.FastText, 
 	}
 	if descriptionEmbeddingVectors != nil {
 		descriptionClean := metadata.DescriptionSplit()
-		indexBuilder.InsertZip(&descriptionEmbeddingVectors, &descriptionClean)
+		indexBuilder.InsertZip(&descriptionEmbeddingVectors, metadata.DatasetID, &descriptionClean)
 	}
 	return nil
 }
@@ -135,7 +147,7 @@ func (indexBuilder IndexBuilder) InsertCategories(fastText *fasttext.FastText, m
 		return err
 	}
 	if categoriesEmbeddingVectors != nil {
-		indexBuilder.InsertZip(&categoriesEmbeddingVectors, &metadata.Categories)
+		indexBuilder.InsertZip(&categoriesEmbeddingVectors, metadata.DatasetID, &metadata.Categories)
 	}
 	return nil
 }
@@ -147,7 +159,7 @@ func (indexBuilder IndexBuilder) InsertTags(fastText *fasttext.FastText, metadat
 		return err
 	}
 	if tagsEmbeddingVectors != nil {
-		indexBuilder.InsertZip(&tagsEmbeddingVectors, &metadata.Tags)
+		indexBuilder.InsertZip(&tagsEmbeddingVectors, metadata.DatasetID, &metadata.Tags)
 	}
 	return nil
 }
