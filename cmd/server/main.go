@@ -29,6 +29,10 @@ type Server struct {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, req *http.Request) {
+	if req.URL.Path != "/" {
+		http.NotFound(w, req)
+		return
+	}
 	s.servePage(w, "index", nil)
 }
 
