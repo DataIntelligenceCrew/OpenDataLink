@@ -19,6 +19,7 @@ const (
 	joinabilityThreshold = 0.5
 )
 
+// Server represents the web server which handles dataset queries
 type Server struct {
 	db                   *database.DB
 	templates            map[string]*template.Template
