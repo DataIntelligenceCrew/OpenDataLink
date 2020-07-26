@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/ekzhu/lshensemble"
-	"github.com/justinfargnoli/go-fasttext"
 	_ "github.com/mattn/go-sqlite3" // Provides the driver for our SQLite database
 )
 
@@ -212,90 +211,4 @@ func (db *DB) MetadataRows() (*[]Metadata, error) {
 	}
 
 	return &metadataRows, nil
-}
-
-// NameEmbeddingVector returns the embedding vector which represents
-// Metadata.Name
-// []float64 == nil when an embedding vector does not exist for Metadata.Name
-func (metadata *Metadata) NameEmbeddingVector(fastText *fasttext.FastText) ([]float64, error) {
-	nameSplit := metadata.NameSplit()
-	embeddingVector, err := fastText.MultiWordEmbeddingVector(nameSplit)
-	if err != nil {
-		return nil, err
-	}
-
-	return embeddingVector, nil
-}
-
-// DescriptionEmbeddingVectors returns an array of embedding vectors which
-// represent the words of Metadata.Description
-// [][]float64 == nil when an embedding vector does not exist for
-// Metadata.Description
-func (metadata *Metadata) DescriptionEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
-	descriptionSplit := metadata.DescriptionSplit()
-	var descriptionEmbeddingVector [][]float64
-	for _, v := range descriptionSplit {
-		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
-		if err != nil {
-			return nil, err
-		}
-		descriptionEmbeddingVector =
-			append(descriptionEmbeddingVector, wordEmbeddingVector)
-	}
-
-	return descriptionEmbeddingVector, nil
-}
-
-// AttributionEmbeddingVectors returns an array of embedding vectors which
-// represent the words of Metadata.Attribution
-// [][]float64 == nil when an embedding vector does not exist for
-// Metadata.Description
-func (metadata *Metadata) AttributionEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
-	attributionSplit := metadata.AttributionSplit()
-	var attributionEmbeddingVector [][]float64
-	for _, v := range attributionSplit {
-		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
-		if err != nil {
-			return nil, err
-		}
-		attributionEmbeddingVector =
-			append(attributionEmbeddingVector, wordEmbeddingVector)
-	}
-
-	return attributionEmbeddingVector, nil
-}
-
-// CategoriesEmbeddingVectors returns an array of embedding vectors which
-// represent the words of Metadata.Categories
-// [][]float64 == nil when an embedding vector does not exist for
-// Metadata.Description
-func (metadata *Metadata) CategoriesEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
-	var categoriesEmbeddingVector [][]float64
-	for _, v := range metadata.Categories {
-		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
-		if err != nil {
-			return nil, err
-		}
-		categoriesEmbeddingVector =
-			append(categoriesEmbeddingVector, wordEmbeddingVector)
-	}
-
-	return categoriesEmbeddingVector, nil
-}
-
-// TagsEmbeddingVectors returns an array of embedding vectors which
-// represent the words of Metadata.Tags
-// [][]float64 == nil when an embedding vector does not exist for
-// Metadata.Description
-func (metadata *Metadata) TagsEmbeddingVectors(fastText *fasttext.FastText) ([][]float64, error) {
-	var tagsEmbeddingVector [][]float64
-	for _, v := range metadata.Tags {
-		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
-		if err != nil {
-			return nil, err
-		}
-		tagsEmbeddingVector = append(tagsEmbeddingVector, wordEmbeddingVector)
-	}
-
-	return tagsEmbeddingVector, nil
 }

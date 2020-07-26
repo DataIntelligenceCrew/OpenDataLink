@@ -81,19 +81,19 @@ func (indexBuilder IndexBuilder) InsertMetadata(metadataRows *[]database.Metadat
 	}()
 
 	for _, v := range *metadataRows {
-		if err := InsertName(indexBuilder, fastText, &v); err != nil {
+		if err := indexBuilder.InsertName(fastText, &v); err != nil {
 			return err
 		}
 
-		if err := InsertDescription(indexBuilder, fastText, &v); err != nil {
+		if err := indexBuilder.InsertDescription(fastText, &v); err != nil {
 			return err
 		}
 
-		if err := InsertCategories(indexBuilder, fastText, &v); err != nil {
+		if err := indexBuilder.InsertCategories(fastText, &v); err != nil {
 			return err
 		}
 
-		if err := InsertTags(indexBuilder, fastText, &v); err != nil {
+		if err := indexBuilder.InsertTags(fastText, &v); err != nil {
 			return err
 		}
 	}
@@ -102,8 +102,8 @@ func (indexBuilder IndexBuilder) InsertMetadata(metadataRows *[]database.Metadat
 }
 
 // InsertName adds Metadata.Name to index
-func InsertName(indexBuilder IndexBuilder, fastText *fasttext.FastText, metadata *database.Metadata) error {
-	nameEmbeddingVector, err := metadata.NameEmbeddingVector(fastText)
+func (indexBuilder IndexBuilder) InsertName(fastText *fasttext.FastText, metadata *database.Metadata) error {
+	nameEmbeddingVector, err := NameEmbeddingVector(metadata, fastText)
 	if err != nil {
 		return err
 	}
@@ -114,9 +114,9 @@ func InsertName(indexBuilder IndexBuilder, fastText *fasttext.FastText, metadata
 }
 
 // InsertDescription adds Metadata.Description to index
-func InsertDescription(indexBuilder IndexBuilder, fastText *fasttext.FastText, metadata *database.Metadata) error {
+func (indexBuilder IndexBuilder) InsertDescription(fastText *fasttext.FastText, metadata *database.Metadata) error {
 	descriptionEmbeddingVectors, err :=
-		metadata.DescriptionEmbeddingVectors(fastText)
+		DescriptionEmbeddingVectors(metadata, fastText)
 	if err != nil {
 		return err
 	}
@@ -128,9 +128,9 @@ func InsertDescription(indexBuilder IndexBuilder, fastText *fasttext.FastText, m
 }
 
 // InsertCategories adds Metadata.Categories to index
-func InsertCategories(indexBuilder IndexBuilder, fastText *fasttext.FastText, metadata *database.Metadata) error {
+func (indexBuilder IndexBuilder) InsertCategories(fastText *fasttext.FastText, metadata *database.Metadata) error {
 	categoriesEmbeddingVectors, err :=
-		metadata.CategoriesEmbeddingVectors(fastText)
+		CategoriesEmbeddingVectors(metadata, fastText)
 	if err != nil {
 		return err
 	}
@@ -141,8 +141,8 @@ func InsertCategories(indexBuilder IndexBuilder, fastText *fasttext.FastText, me
 }
 
 // InsertTags adds Metadata.Tags to index
-func InsertTags(indexBuilder IndexBuilder, fastText *fasttext.FastText, metadata *database.Metadata) error {
-	tagsEmbeddingVectors, err := metadata.TagsEmbeddingVectors(fastText)
+func (indexBuilder IndexBuilder) InsertTags(fastText *fasttext.FastText, metadata *database.Metadata) error {
+	tagsEmbeddingVectors, err := TagsEmbeddingVectors(metadata, fastText)
 	if err != nil {
 		return err
 	}
@@ -150,4 +150,90 @@ func InsertTags(indexBuilder IndexBuilder, fastText *fasttext.FastText, metadata
 		indexBuilder.InsertZip(&tagsEmbeddingVectors, &metadata.Tags)
 	}
 	return nil
+}
+
+// NameEmbeddingVector returns the embedding vector which represents
+// Metadata.Name
+// []float64 == nil when an embedding vector does not exist for Metadata.Name
+func NameEmbeddingVector(metadata *database.Metadata, fastText *fasttext.FastText) ([]float64, error) {
+	nameSplit := metadata.NameSplit()
+	embeddingVector, err := fastText.MultiWordEmbeddingVector(nameSplit)
+	if err != nil {
+		return nil, err
+	}
+
+	return embeddingVector, nil
+}
+
+// DescriptionEmbeddingVectors returns an array of embedding vectors which
+// represent the words of Metadata.Description
+// [][]float64 == nil when an embedding vector does not exist for
+// Metadata.Description
+func DescriptionEmbeddingVectors(metadata *database.Metadata, fastText *fasttext.FastText) ([][]float64, error) {
+	descriptionSplit := metadata.DescriptionSplit()
+	var descriptionEmbeddingVector [][]float64
+	for _, v := range descriptionSplit {
+		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
+		if err != nil {
+			return nil, err
+		}
+		descriptionEmbeddingVector =
+			append(descriptionEmbeddingVector, wordEmbeddingVector)
+	}
+
+	return descriptionEmbeddingVector, nil
+}
+
+// AttributionEmbeddingVectors returns an array of embedding vectors which
+// represent the words of Metadata.Attribution
+// [][]float64 == nil when an embedding vector does not exist for
+// Metadata.Description
+func AttributionEmbeddingVectors(metadata *database.Metadata, fastText *fasttext.FastText) ([][]float64, error) {
+	attributionSplit := metadata.AttributionSplit()
+	var attributionEmbeddingVector [][]float64
+	for _, v := range attributionSplit {
+		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
+		if err != nil {
+			return nil, err
+		}
+		attributionEmbeddingVector =
+			append(attributionEmbeddingVector, wordEmbeddingVector)
+	}
+
+	return attributionEmbeddingVector, nil
+}
+
+// CategoriesEmbeddingVectors returns an array of embedding vectors which
+// represent the words of Metadata.Categories
+// [][]float64 == nil when an embedding vector does not exist for
+// Metadata.Description
+func CategoriesEmbeddingVectors(metadata *database.Metadata, fastText *fasttext.FastText) ([][]float64, error) {
+	var categoriesEmbeddingVector [][]float64
+	for _, v := range metadata.Categories {
+		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
+		if err != nil {
+			return nil, err
+		}
+		categoriesEmbeddingVector =
+			append(categoriesEmbeddingVector, wordEmbeddingVector)
+	}
+
+	return categoriesEmbeddingVector, nil
+}
+
+// TagsEmbeddingVectors returns an array of embedding vectors which
+// represent the words of Metadata.Tags
+// [][]float64 == nil when an embedding vector does not exist for
+// Metadata.Description
+func TagsEmbeddingVectors(metadata *database.Metadata, fastText *fasttext.FastText) ([][]float64, error) {
+	var tagsEmbeddingVector [][]float64
+	for _, v := range metadata.Tags {
+		wordEmbeddingVector, err := fastText.EmbeddingVector(v)
+		if err != nil {
+			return nil, err
+		}
+		tagsEmbeddingVector = append(tagsEmbeddingVector, wordEmbeddingVector)
+	}
+
+	return tagsEmbeddingVector, nil
 }
