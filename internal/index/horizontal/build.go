@@ -63,7 +63,7 @@ func (indexBuilder IndexBuilder) Insert(embeddingVector []float64, ID string) {
 // to the index
 func (indexBuilder IndexBuilder) InsertZip(embeddingVectors *[][]float64, IDs *[]string) {
 	if len(*embeddingVectors) != len(*IDs) {
-		log.Fatal("len(embeddingVectors) !=len(IDs)")
+		log.Fatal("len(embeddingVectors) != len(IDs)")
 	}
 
 	for i := range *embeddingVectors {
