@@ -1,6 +1,7 @@
 package horizontal
 
 import (
+	"errors"
 	"log"
 	"os"
 
@@ -14,11 +15,23 @@ const dimensionCount = fasttext.Dim
 const hashTableCount = 1
 const hashValuePerHashTableCount = 1
 
+func fastTextPath() (string, error) {
+	path := os.Getenv("FAST_TEXT_DB")
+	if path == "" {
+		return "", errors.New("'FAST_TEXT_DB' enviroment variable is not set")
+	}
+	return path, nil
+}
+
 // BuildMetadataIndex builds a LSH index using github.com/fnargesian/simhash-lsh
 func BuildMetadataIndex(db *database.DB) (Index, error) {
 	indexBuilder := NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount)
 
-	fastText := fasttext.New(os.Getenv("FAST_TEXT_DB"))
+	path, err := fastTextPath()
+	if err != nil {
+		return Index{}, nil
+	}
+	fastText := fasttext.New(path)
 	defer func() {
 		if err := fastText.Close(); err != nil {
 			log.Fatal(err)

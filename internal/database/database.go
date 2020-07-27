@@ -2,22 +2,31 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"strings"
 
 	"github.com/ekzhu/lshensemble"
-	_ "github.com/mattn/go-sqlite3" // Provides the driver for our SQLite database
+	_ "github.com/mattn/go-sqlite3" // Provides the driver for our SQLite
 )
 
-// DatabasePath is the path to the sqlite database when testing the program
-var DatabasePath = os.Getenv("OPEN_DATA_LINK_DB")
+// Path is the path to the sqlite  when testing the program
+func Path() (string, error) {
+	path := os.Getenv("OPEN_DATA_LINK_DB")
+	if path == "" {
+		return "", errors.New("'OPEN_DATA_LINK_DB' enviroment variable is not set")
+	}
+	return path, nil
+}
 
-// DB is a wrapper of the opendatalink SQLite3 database
+// var Path = os.Getenv("OPEN_DATA_LINK_DB")
+
+// DB is a wrapper of the opendatalink SQLite3
 type DB struct {
 	*sql.DB
 }
 
-// New returns a handle to the database give a path to its file
+// New returns a handle to the  give a path to its file
 func New(databasePath string) (*DB, error) {
 	db, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
