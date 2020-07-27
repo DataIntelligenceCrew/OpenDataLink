@@ -15,3 +15,4 @@ opendatalink.sqlite3
 opendatalink.sqlite3-journal
 fast_text.sqlite3
 fast_text.sqlite3-journal
+test/setup_justin.sh
