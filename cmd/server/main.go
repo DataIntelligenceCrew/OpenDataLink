@@ -42,11 +42,13 @@ func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 	type searchResult struct {
 		DatasetID   string
 		DatasetName string
+		Description string
+		Tags        string
 	}
 	var results []*searchResult
 
 	rows, err := s.db.Query(`
-	SELECT dataset_id, name
+	SELECT dataset_id, name, description, tags
 	FROM metadata
 	WHERE name || description LIKE ?`, "%"+query+"%")
 	if err != nil {
@@ -57,10 +59,19 @@ func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 
 	for rows.Next() {
 		var res searchResult
-		if err = rows.Scan(&res.DatasetID, &res.DatasetName); err != nil {
+		var description, tags string
+		err = rows.Scan(&res.DatasetID, &res.DatasetName, &description, &tags)
+		if err != nil {
 			serverError(w, err)
 			return
 		}
+		if len(description) <= 200 {
+			res.Description = description
+		} else {
+			res.Description = description[:197] + "..."
+		}
+		res.Tags = strings.Join(strings.Split(tags, ","), ", ")
+
 		results = append(results, &res)
 	}
 	if err := rows.Err(); err != nil {
@@ -242,6 +253,8 @@ func main() {
 	http.HandleFunc("/search", s.handleSearch)
 	http.HandleFunc("/dataset/", s.handleDataset)
 	http.HandleFunc("/joinable-columns", s.handleJoinableColumns)
+
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

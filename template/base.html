@@ -2,13 +2,16 @@
 <html>
 <head>
   <title>Open Data Link</title>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <p><a href="/">Open Data Link</a></p>
+  <nav>
+    <a href="/">Open Data Link</a>
 
-  <form action="/search">
-    <input name="q" placeholder="Search" value="{{block "search_query" .}}{{end}}">
-  </form>
+    <form action="/search">
+      <input name="q" placeholder="Search" value="{{block "search_query" .}}{{end}}">
+    </form>
+  </nav>
 
   {{template "content" .}}
 </body>

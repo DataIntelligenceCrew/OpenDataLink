@@ -1,9 +1,13 @@
 {{define "content"}}
-  <h2>Search results</h2>
-  <p>Showing {{.NumResults}} results.</p>
+  <h2>Results for "{{.Query}}"</h2>
+  <p>{{.NumResults}} results</p>
 
   {{range .Results}}
-    <p><a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a></p>
+    <div class="search-snippet">
+      <h3><a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a></h3>
+      <p>{{.Description}}</p>
+      <p><strong>Tags:</strong> {{.Tags}}</p>
+    </div>
   {{end}}
 {{end}}
 

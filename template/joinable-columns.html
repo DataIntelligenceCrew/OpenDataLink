@@ -6,7 +6,7 @@
     <p>
     <a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a> &gt;
     <a href="/joinable-columns?q={{.ColumnID}}">{{.ColumnName}}</a>
-    (containment: {{.Containment}})
+    (containment: {{printf "%.2f" .Containment}})
     </p>
   {{else}}
     <p>No joinable tables.</p>
