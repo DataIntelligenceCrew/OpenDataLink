@@ -24,7 +24,7 @@ func BuildMetadataIndex(db *database.DB) (Index, error) {
 			log.Fatal(err)
 		}
 	}()
-			
+
 	metadataIterator, err := db.NewMetadataIterator()
 	if err != nil {
 		return Index{}, err
