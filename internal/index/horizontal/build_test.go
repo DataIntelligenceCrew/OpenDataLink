@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuildMetadataIndex(t *testing.T) {
-	db, err := database.New(database.TestPath)
+	db, err := database.New(database.DatabasePath)
 	if err != nil {
 		t.Fatal(err)
 	}

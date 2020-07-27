@@ -3,14 +3,14 @@ package database
 import "testing"
 
 func TestNew(t *testing.T) {
-	_, err := New(TestPath)
+	_, err := New(DatabasePath)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestMetadataRows(t *testing.T) {
-	db, err := New(TestPath)
+	db, err := New(DatabasePath)
 	if err != nil {
 		t.Fatal(err)
 	}

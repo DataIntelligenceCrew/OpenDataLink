@@ -9,8 +9,8 @@ import (
 	_ "github.com/mattn/go-sqlite3" // Provides the driver for our SQLite database
 )
 
-// TestPath is the path to the sqlite database when testing the program
-var TestPath = os.Getenv("OPEN_DATA_LINK_DB")
+// DatabasePath is the path to the sqlite database when testing the program
+var DatabasePath = os.Getenv("OPEN_DATA_LINK_DB")
 
 // DB is a wrapper of the opendatalink SQLite3 database
 type DB struct {
