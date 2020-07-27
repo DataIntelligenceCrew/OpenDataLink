@@ -19,8 +19,6 @@ func Path() (string, error) {
 	return path, nil
 }
 
-// var Path = os.Getenv("OPEN_DATA_LINK_DB")
-
 // DB is a wrapper of the opendatalink SQLite3
 type DB struct {
 	*sql.DB
@@ -195,15 +193,19 @@ func (db *DB) MetadataRows() (*[]Metadata, error) {
 	defer rows.Close()
 
 	var metadataRows []Metadata
-	for isNext := rows.Next(); isNext; isNext = rows.Next() {
-		metadata, err := MetadataScan(rows)
+	metadataIterator, err := db.NewMetadataIterator()
+	if err != nil {
+		return nil, err
+	}
+	for metadataIterator.HasNext() {
+		metadata, err := metadataIterator.Row()
 		if err != nil {
 			return nil, err
 		}
 		metadataRows = append(metadataRows, *metadata)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	if err := metadataIterator.End(); err != nil {
+		return nil, nil
 	}
 
 	return &metadataRows, nil
