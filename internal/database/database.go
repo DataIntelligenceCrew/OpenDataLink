@@ -187,28 +187,66 @@ func (db *DB) MetadataRows() (*[]Metadata, error) {
 
 	var metadataRows []Metadata
 	for isNext := rows.Next(); isNext; isNext = rows.Next() {
-		var metadata Metadata
-		var categories string
-		var tags string
-		if err := rows.Scan(&metadata.DatasetID, &metadata.Name,
-			&metadata.Description, &metadata.Attribution,
-			&metadata.ContactEmail, &metadata.UpdatedAt,
-			&categories, &tags, &metadata.Permalink); err != nil {
+		metadata, err := MetadataScan(rows)
+		if err != nil {
 			return nil, err
 		}
-
-		if categories != "" {
-			metadata.Categories = CategoriesSplit(categories)
-		}
-		if tags != "" {
-			metadata.Tags = TagsSplit(tags)
-		}
-
-		metadataRows = append(metadataRows, metadata)
+		metadataRows = append(metadataRows, *metadata)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
 	return &metadataRows, nil
+}
+
+// MetadataScan extracts a row from rows into a database.Metadata instance
+func MetadataScan(rows *sql.Rows) (*Metadata, error) {
+	var metadata Metadata
+	var categories string
+	var tags string
+	if err := rows.Scan(&metadata.DatasetID, &metadata.Name,
+		&metadata.Description, &metadata.Attribution,
+		&metadata.ContactEmail, &metadata.UpdatedAt,
+		&categories, &tags, &metadata.Permalink); err != nil {
+		return nil, err
+	}
+
+	if categories != "" {
+		metadata.Categories = CategoriesSplit(categories)
+	}
+	if tags != "" {
+		metadata.Tags = TagsSplit(tags)
+	}
+
+	return &metadata, nil
+}
+
+// MetadataIterator provides a iterator over the rows of the metadata
+type MetadataIterator struct {
+	rows *sql.Rows
+}
+
+// NewMetadataIterator contrust a MetadataIterator
+func (db *DB) NewMetadataIterator() (MetadataIterator, error) {
+	rows, err := db.Query("SELECT * from metadata;")
+	if err != nil {
+		return MetadataIterator{}, err
+	}
+	return MetadataIterator{rows}, nil
+}
+
+// HasNext must be called before each call to MetadataIterator.Row()
+func (metadataIterator MetadataIterator) HasNext() bool {
+	return metadataIterator.rows.Next()
+}
+
+// Row returns the current row of metadata from the iterator
+func (metadataIterator MetadataIterator) Row() (*Metadata, error) {
+	return MetadataScan(metadataIterator.rows)
+}
+
+// End prevent all futher enumeration of the iterator
+func (metadataIterator MetadataIterator) End() error {
+	return metadataIterator.rows.Close()
 }

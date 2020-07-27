@@ -16,15 +16,30 @@ const hashValuePerHashTableCount = 1
 
 // BuildMetadataIndex builds a LSH index using github.com/fnargesian/simhash-lsh
 func BuildMetadataIndex(db *database.DB) (Index, error) {
-	metadataRows, err := db.MetadataRows()
+	indexBuilder := NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount)
+
+	fastText := fasttext.New(os.Getenv("FAST_TEXT_DB"))
+	defer func() {
+		if err := fastText.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+			
+	metadataIterator, err := db.NewMetadataIterator()
 	if err != nil {
 		return Index{}, err
 	}
-
-	indexBuilder := NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount)
-
-	if indexBuilder.InsertMetadata(metadataRows) != nil {
-		return Index{}, err
+	for metadataIterator.HasNext() {
+		metadata, err := metadataIterator.Row()
+		if err != nil {
+			return Index{}, err
+		}
+		if err := indexBuilder.InsertMetadata(metadata, fastText); err != nil {
+			return Index{}, nil
+		}
+	}
+	if err := metadataIterator.End(); err != nil {
+		return Index{}, nil
 	}
 
 	return indexBuilder.ToIndex(), nil
@@ -83,8 +98,8 @@ func (point *Point) ID() string {
 	return point.DatasetID + point.Value
 }
 
-// InsertMetadata adds metadataRows to a simhashlsh.CosineLsh index
-func (indexBuilder IndexBuilder) InsertMetadata(metadataRows *[]database.Metadata) error {
+// InsertMetadataRows adds metadataRows to a simhashlsh.CosineLsh index
+func (indexBuilder IndexBuilder) InsertMetadataRows(metadataRows *[]database.Metadata) error {
 	fastText := fasttext.New(os.Getenv("FAST_TEXT_DB"))
 	defer func() {
 		if err := fastText.Close(); err != nil {
@@ -93,23 +108,26 @@ func (indexBuilder IndexBuilder) InsertMetadata(metadataRows *[]database.Metadat
 	}()
 
 	for _, v := range *metadataRows {
-		if err := indexBuilder.InsertName(fastText, &v); err != nil {
-			return err
-		}
-
-		if err := indexBuilder.InsertDescription(fastText, &v); err != nil {
-			return err
-		}
-
-		if err := indexBuilder.InsertCategories(fastText, &v); err != nil {
-			return err
-		}
-
-		if err := indexBuilder.InsertTags(fastText, &v); err != nil {
-			return err
-		}
+		indexBuilder.InsertMetadata(&v, fastText)
 	}
 
+	return nil
+}
+
+// InsertMetadata adds one row of the metadata to the index
+func (indexBuilder IndexBuilder) InsertMetadata(metadata *database.Metadata, fastText *fasttext.FastText) error {
+	if err := indexBuilder.InsertName(fastText, metadata); err != nil {
+		return err
+	}
+	if err := indexBuilder.InsertDescription(fastText, metadata); err != nil {
+		return err
+	}
+	if err := indexBuilder.InsertCategories(fastText, metadata); err != nil {
+		return err
+	}
+	if err := indexBuilder.InsertTags(fastText, metadata); err != nil {
+		return err
+	}
 	return nil
 }
 
