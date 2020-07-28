@@ -2,7 +2,7 @@ package horizontal
 
 import (
 	"errors"
-	"log"
+	"fmt"
 	"os"
 
 	"opendatalink/internal/database"
@@ -29,12 +29,12 @@ func BuildMetadataIndex(db *database.DB) (Index, error) {
 
 	path, err := fastTextPath()
 	if err != nil {
-		return Index{}, nil
+		panic(err)
 	}
 	fastText := fasttext.New(path)
 	defer func() {
 		if err := fastText.Close(); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 	}()
 
@@ -47,9 +47,7 @@ func BuildMetadataIndex(db *database.DB) (Index, error) {
 		if err != nil {
 			return Index{}, err
 		}
-		if err := indexBuilder.InsertMetadata(metadata, fastText); err != nil {
-			return Index{}, nil
-		}
+		indexBuilder.InsertMetadata(metadata, fastText)
 	}
 	if err := metadataIterator.End(); err != nil {
 		return Index{}, nil
@@ -91,7 +89,7 @@ func (indexBuilder IndexBuilder) Insert(point Point) {
 // to the index
 func (indexBuilder IndexBuilder) InsertZip(embeddingVectors *[][]float64, datasetID string, IDs *[]string) {
 	if len(*embeddingVectors) != len(*IDs) {
-		log.Fatal("len(embeddingVectors) != len(IDs)")
+		panic(fmt.Sprintf("(len(embeddingVectors) = %v) != (len(IDs) = %v)", len(*embeddingVectors), len(*IDs)))
 	}
 
 	for i := range *embeddingVectors {
@@ -113,10 +111,14 @@ func (point *Point) ID() string {
 
 // InsertMetadataRows adds metadataRows to a simhashlsh.CosineLsh index
 func (indexBuilder IndexBuilder) InsertMetadataRows(metadataRows *[]database.Metadata) error {
-	fastText := fasttext.New(os.Getenv("FAST_TEXT_DB"))
+	path, err := fastTextPath()
+	if err != nil {
+		panic(err)
+	}
+	fastText := fasttext.New(path)
 	defer func() {
 		if err := fastText.Close(); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 	}()
 
@@ -128,71 +130,50 @@ func (indexBuilder IndexBuilder) InsertMetadataRows(metadataRows *[]database.Met
 }
 
 // InsertMetadata adds one row of the metadata to the index
-func (indexBuilder IndexBuilder) InsertMetadata(metadata *database.Metadata, fastText *fasttext.FastText) error {
-	if err := indexBuilder.InsertName(fastText, metadata); err != nil {
-		return err
-	}
-	if err := indexBuilder.InsertDescription(fastText, metadata); err != nil {
-		return err
-	}
-	if err := indexBuilder.InsertCategories(fastText, metadata); err != nil {
-		return err
-	}
-	if err := indexBuilder.InsertTags(fastText, metadata); err != nil {
-		return err
-	}
-	return nil
+func (indexBuilder IndexBuilder) InsertMetadata(metadata *database.Metadata, fastText *fasttext.FastText) {
+	indexBuilder.InsertName(fastText, metadata)
+	indexBuilder.InsertDescription(fastText, metadata)
+	indexBuilder.InsertCategories(fastText, metadata)
+	indexBuilder.InsertTags(fastText, metadata)
 }
 
 // InsertName adds Metadata.Name to index
-func (indexBuilder IndexBuilder) InsertName(fastText *fasttext.FastText, metadata *database.Metadata) error {
+func (indexBuilder IndexBuilder) InsertName(fastText *fasttext.FastText, metadata *database.Metadata) {
 	nameEmbeddingVector, err := NameEmbeddingVector(metadata, fastText)
 	if err != nil {
-		return err
+		return
 	}
-	if nameEmbeddingVector != nil {
-		indexBuilder.Insert(Point{nameEmbeddingVector, metadata.DatasetID, metadata.Name})
-	}
-	return nil
+	indexBuilder.Insert(Point{nameEmbeddingVector, metadata.DatasetID, metadata.Name})
 }
 
 // InsertDescription adds Metadata.Description to index
-func (indexBuilder IndexBuilder) InsertDescription(fastText *fasttext.FastText, metadata *database.Metadata) error {
+func (indexBuilder IndexBuilder) InsertDescription(fastText *fasttext.FastText, metadata *database.Metadata) {
 	descriptionEmbeddingVectors, err :=
 		DescriptionEmbeddingVectors(metadata, fastText)
 	if err != nil {
-		return err
+		return
 	}
-	if descriptionEmbeddingVectors != nil {
-		descriptionClean := metadata.DescriptionSplit()
-		indexBuilder.InsertZip(&descriptionEmbeddingVectors, metadata.DatasetID, &descriptionClean)
-	}
-	return nil
+	descriptionSplit := metadata.DescriptionSplit()
+	indexBuilder.InsertZip(&descriptionEmbeddingVectors, metadata.DatasetID, &descriptionSplit)
 }
 
 // InsertCategories adds Metadata.Categories to index
-func (indexBuilder IndexBuilder) InsertCategories(fastText *fasttext.FastText, metadata *database.Metadata) error {
+func (indexBuilder IndexBuilder) InsertCategories(fastText *fasttext.FastText, metadata *database.Metadata) {
 	categoriesEmbeddingVectors, err :=
 		CategoriesEmbeddingVectors(metadata, fastText)
 	if err != nil {
-		return err
+		return
 	}
-	if categoriesEmbeddingVectors != nil {
-		indexBuilder.InsertZip(&categoriesEmbeddingVectors, metadata.DatasetID, &metadata.Categories)
-	}
-	return nil
+	indexBuilder.InsertZip(&categoriesEmbeddingVectors, metadata.DatasetID, &metadata.Categories)
 }
 
 // InsertTags adds Metadata.Tags to index
-func (indexBuilder IndexBuilder) InsertTags(fastText *fasttext.FastText, metadata *database.Metadata) error {
+func (indexBuilder IndexBuilder) InsertTags(fastText *fasttext.FastText, metadata *database.Metadata) {
 	tagsEmbeddingVectors, err := TagsEmbeddingVectors(metadata, fastText)
 	if err != nil {
-		return err
+		return
 	}
-	if tagsEmbeddingVectors != nil {
-		indexBuilder.InsertZip(&tagsEmbeddingVectors, metadata.DatasetID, &metadata.Tags)
-	}
-	return nil
+	indexBuilder.InsertZip(&tagsEmbeddingVectors, metadata.DatasetID, &metadata.Tags)
 }
 
 // NameEmbeddingVector returns the embedding vector which represents
@@ -204,14 +185,11 @@ func NameEmbeddingVector(metadata *database.Metadata, fastText *fasttext.FastTex
 	if err != nil {
 		return nil, err
 	}
-
 	return embeddingVector, nil
 }
 
 // DescriptionEmbeddingVectors returns an array of embedding vectors which
 // represent the words of Metadata.Description
-// [][]float64 == nil when an embedding vector does not exist for
-// Metadata.Description
 func DescriptionEmbeddingVectors(metadata *database.Metadata, fastText *fasttext.FastText) ([][]float64, error) {
 	descriptionSplit := metadata.DescriptionSplit()
 	var descriptionEmbeddingVector [][]float64
@@ -229,8 +207,6 @@ func DescriptionEmbeddingVectors(metadata *database.Metadata, fastText *fasttext
 
 // AttributionEmbeddingVectors returns an array of embedding vectors which
 // represent the words of Metadata.Attribution
-// [][]float64 == nil when an embedding vector does not exist for
-// Metadata.Description
 func AttributionEmbeddingVectors(metadata *database.Metadata, fastText *fasttext.FastText) ([][]float64, error) {
 	attributionSplit := metadata.AttributionSplit()
 	var attributionEmbeddingVector [][]float64
@@ -248,8 +224,6 @@ func AttributionEmbeddingVectors(metadata *database.Metadata, fastText *fasttext
 
 // CategoriesEmbeddingVectors returns an array of embedding vectors which
 // represent the words of Metadata.Categories
-// [][]float64 == nil when an embedding vector does not exist for
-// Metadata.Description
 func CategoriesEmbeddingVectors(metadata *database.Metadata, fastText *fasttext.FastText) ([][]float64, error) {
 	var categoriesEmbeddingVector [][]float64
 	for _, v := range metadata.Categories {
@@ -266,8 +240,6 @@ func CategoriesEmbeddingVectors(metadata *database.Metadata, fastText *fasttext.
 
 // TagsEmbeddingVectors returns an array of embedding vectors which
 // represent the words of Metadata.Tags
-// [][]float64 == nil when an embedding vector does not exist for
-// Metadata.Description
 func TagsEmbeddingVectors(metadata *database.Metadata, fastText *fasttext.FastText) ([][]float64, error) {
 	var tagsEmbeddingVector [][]float64
 	for _, v := range metadata.Tags {
