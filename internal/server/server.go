@@ -10,6 +10,7 @@ import (
 
 	"github.com/ekzhu/lshensemble"
 	"opendatalink/internal/database"
+	"opendatalink/internal/index/horizontal"
 )
 
 // Server can be installed to serve the Open Data Link frontend.
@@ -19,6 +20,7 @@ type Server struct {
 	templates            map[string]*template.Template
 	joinabilityThreshold float64
 	joinabilityIndex     *lshensemble.LshEnsemble
+	MetadataIndex        horizontal.Index
 }
 
 // Config is used to configure the server.
@@ -36,12 +38,17 @@ func New(cfg *Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	metadataIndex, err := buildMetadataIndex(cfg.DB)
+	if err != nil {
+		panic(err)
+	}
 	return &Server{
 		devMode:              cfg.DevMode,
 		db:                   cfg.DB,
 		templates:            templates,
 		joinabilityThreshold: cfg.JoinabilityThreshold,
 		joinabilityIndex:     cfg.JoinabilityIndex,
+		MetadataIndex:        metadataIndex,
 	}, nil
 }
 
@@ -63,6 +70,25 @@ func (s *Server) handleIndex(w http.ResponseWriter, req *http.Request) {
 	s.servePage(w, "index", nil)
 }
 
+func buildMetadataIndex(db *database.DB) (horizontal.Index, error) {
+	index, err := horizontal.BuildMetadataIndex(db)
+	if err != nil {
+		return horizontal.Index{}, err
+	}
+	return index, nil
+}
+
+func formatDescription(description string) string {
+	if len(description) >= 200 {
+		return description[:197] + "..."
+	}
+	return description
+}
+
+func formatTags(tags []string) string {
+	return strings.Join(tags, ", ")
+}
+
 func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 	query := req.FormValue("q")
 
@@ -73,37 +99,17 @@ func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 		Tags        string
 	}
 	var results []*searchResult
-
-	rows, err := s.db.Query(`
-	SELECT dataset_id, name, description, tags
-	FROM metadata
-	WHERE name || description LIKE ?`, "%"+query+"%")
-	if err != nil {
-		serverError(w, err)
-		return
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var res searchResult
-		var description, tags string
-		err = rows.Scan(&res.DatasetID, &res.DatasetName, &description, &tags)
+	for _, datasetID := range s.MetadataIndex.Search(query) {
+		metadata, err := s.db.Metadata(datasetID)
 		if err != nil {
-			serverError(w, err)
-			return
+			panic(err)
 		}
-		if len(description) <= 200 {
-			res.Description = description
-		} else {
-			res.Description = description[:197] + "..."
-		}
-		res.Tags = strings.Join(strings.Split(tags, ","), ", ")
-
-		results = append(results, &res)
-	}
-	if err := rows.Err(); err != nil {
-		serverError(w, err)
-		return
+		results = append(results, &searchResult{
+			datasetID,
+			metadata.Name,
+			formatDescription(metadata.Description),
+			formatTags(metadata.Tags),
+		})
 	}
 
 	s.servePage(w, "search", &struct {
