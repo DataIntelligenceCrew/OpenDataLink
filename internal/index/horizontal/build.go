@@ -27,17 +27,6 @@ func fastTextPath() (string, error) {
 func BuildMetadataIndex(db *database.DB) (Index, error) {
 	indexBuilder := NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount)
 
-	path, err := fastTextPath()
-	if err != nil {
-		panic(err)
-	}
-	fastText := fasttext.New(path)
-	defer func() {
-		if err := fastText.Close(); err != nil {
-			panic(err)
-		}
-	}()
-
 	metadataIterator, err := db.NewMetadataIterator()
 	if err != nil {
 		return Index{}, err
@@ -47,7 +36,7 @@ func BuildMetadataIndex(db *database.DB) (Index, error) {
 		if err != nil {
 			return Index{}, err
 		}
-		indexBuilder.InsertMetadata(metadata, fastText)
+		indexBuilder.InsertMetadata(metadata)
 	}
 	if err := metadataIterator.End(); err != nil {
 		return Index{}, nil
@@ -58,7 +47,8 @@ func BuildMetadataIndex(db *database.DB) (Index, error) {
 
 // IndexBuilder is a write only wrapper of simhashlsh.CosineLsh
 type IndexBuilder struct {
-	index *simhashlsh.CosineLsh
+	index    *simhashlsh.CosineLsh
+	fastText fasttext.FastText
 }
 
 // NewIndexBuilder constructs an IndexBuilder
@@ -67,16 +57,19 @@ type IndexBuilder struct {
 // NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount)
 // map to simhash.NewCosinLsh(dim, l m)'s dim, l, and m respectivly
 func NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount int) IndexBuilder {
+	path, err := fastTextPath()
+	if err != nil {
+		panic(err)
+	}
 	return IndexBuilder{
 		index: simhashlsh.NewCosineLsh(dimensionCount, hashTableCount, hashValuePerHashTableCount),
+		fastText: *fasttext.New(path),
 	}
 }
 
 // ToIndex coverts the IndexBuilder to an Index
 func (indexBuilder IndexBuilder) ToIndex() Index {
-	return Index{
-		index: indexBuilder.index,
-	}
+	return Index{indexBuilder.index, indexBuilder.fastText}
 }
 
 // Insert adds the embeddingVector and id to the index
@@ -91,7 +84,6 @@ func (indexBuilder IndexBuilder) InsertZip(embeddingVectors *[][]float64, datase
 	if len(*embeddingVectors) != len(*IDs) {
 		panic(fmt.Sprintf("(len(embeddingVectors) = %v) != (len(IDs) = %v)", len(*embeddingVectors), len(*IDs)))
 	}
-
 	for i := range *embeddingVectors {
 		indexBuilder.Insert(Point{(*embeddingVectors)[i], datasetID, (*IDs)[i]})
 	}
@@ -111,35 +103,23 @@ func (point *Point) ID() string {
 
 // InsertMetadataRows adds metadataRows to a simhashlsh.CosineLsh index
 func (indexBuilder IndexBuilder) InsertMetadataRows(metadataRows *[]database.Metadata) error {
-	path, err := fastTextPath()
-	if err != nil {
-		panic(err)
-	}
-	fastText := fasttext.New(path)
-	defer func() {
-		if err := fastText.Close(); err != nil {
-			panic(err)
-		}
-	}()
-
 	for _, v := range *metadataRows {
-		indexBuilder.InsertMetadata(&v, fastText)
+		indexBuilder.InsertMetadata(&v)
 	}
-
 	return nil
 }
 
 // InsertMetadata adds one row of the metadata to the index
-func (indexBuilder IndexBuilder) InsertMetadata(metadata *database.Metadata, fastText *fasttext.FastText) {
-	indexBuilder.InsertName(fastText, metadata)
-	indexBuilder.InsertDescription(fastText, metadata)
-	indexBuilder.InsertCategories(fastText, metadata)
-	indexBuilder.InsertTags(fastText, metadata)
+func (indexBuilder IndexBuilder) InsertMetadata(metadata *database.Metadata) {
+	indexBuilder.InsertName(metadata)
+	indexBuilder.InsertDescription(metadata)
+	indexBuilder.InsertCategories(metadata)
+	indexBuilder.InsertTags(metadata)
 }
 
 // InsertName adds Metadata.Name to index
-func (indexBuilder IndexBuilder) InsertName(fastText *fasttext.FastText, metadata *database.Metadata) {
-	nameEmbeddingVector, err := NameEmbeddingVector(metadata, fastText)
+func (indexBuilder IndexBuilder) InsertName(metadata *database.Metadata) {
+	nameEmbeddingVector, err := NameEmbeddingVector(metadata, &indexBuilder.fastText)
 	if err != nil {
 		return
 	}
@@ -147,9 +127,9 @@ func (indexBuilder IndexBuilder) InsertName(fastText *fasttext.FastText, metadat
 }
 
 // InsertDescription adds Metadata.Description to index
-func (indexBuilder IndexBuilder) InsertDescription(fastText *fasttext.FastText, metadata *database.Metadata) {
+func (indexBuilder IndexBuilder) InsertDescription(metadata *database.Metadata) {
 	descriptionEmbeddingVectors, err :=
-		DescriptionEmbeddingVectors(metadata, fastText)
+		DescriptionEmbeddingVectors(metadata, &indexBuilder.fastText)
 	if err != nil {
 		return
 	}
@@ -158,9 +138,9 @@ func (indexBuilder IndexBuilder) InsertDescription(fastText *fasttext.FastText, 
 }
 
 // InsertCategories adds Metadata.Categories to index
-func (indexBuilder IndexBuilder) InsertCategories(fastText *fasttext.FastText, metadata *database.Metadata) {
+func (indexBuilder IndexBuilder) InsertCategories(metadata *database.Metadata) {
 	categoriesEmbeddingVectors, err :=
-		CategoriesEmbeddingVectors(metadata, fastText)
+		CategoriesEmbeddingVectors(metadata, &indexBuilder.fastText)
 	if err != nil {
 		return
 	}
@@ -168,8 +148,8 @@ func (indexBuilder IndexBuilder) InsertCategories(fastText *fasttext.FastText, m
 }
 
 // InsertTags adds Metadata.Tags to index
-func (indexBuilder IndexBuilder) InsertTags(fastText *fasttext.FastText, metadata *database.Metadata) {
-	tagsEmbeddingVectors, err := TagsEmbeddingVectors(metadata, fastText)
+func (indexBuilder IndexBuilder) InsertTags(metadata *database.Metadata) {
+	tagsEmbeddingVectors, err := TagsEmbeddingVectors(metadata, &indexBuilder.fastText)
 	if err != nil {
 		return
 	}
