@@ -25,4 +25,7 @@ func buildIndex(t *testing.T) Index {
 func TestQuery(t *testing.T) {
 	index := buildIndex(t)
 	index.Search("spread of coronavirus in new york state")
+	index.Search("bacteria growth in outer space")
+	index.Search("boat education health care")
+	index.Search("children architecture go")
 }
