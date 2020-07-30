@@ -28,7 +28,7 @@ type queryResult struct {
 
 // buildQueryResult builds a queryResult given a query result in string form
 func buildQueryResult(query string) queryResult {
-	return queryResult{query[:10], query[10:]}
+	return queryResult{query[:9], query[9:]} // 9 is the length of datasetID
 }
 
 // queryEmbeddingVector finds the queryResult's of approximate nearest neighbour

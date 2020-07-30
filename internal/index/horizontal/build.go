@@ -12,8 +12,8 @@ import (
 )
 
 const dimensionCount = fasttext.Dim
-const hashTableCount = 1
-const hashValuePerHashTableCount = 1
+const hashTableCount = 40
+const hashValuePerHashTableCount = 10
 
 func fastTextPath() (string, error) {
 	path := os.Getenv("FAST_TEXT_DB")

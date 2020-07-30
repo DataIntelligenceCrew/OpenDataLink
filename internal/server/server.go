@@ -40,7 +40,7 @@ func New(cfg *Config) (*Server, error) {
 	}
 	metadataIndex, err := buildMetadataIndex(cfg.DB)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	return &Server{
 		devMode:              cfg.DevMode,
@@ -75,6 +75,7 @@ func buildMetadataIndex(db *database.DB) (horizontal.Index, error) {
 	if err != nil {
 		return horizontal.Index{}, err
 	}
+	log.Print("server: built metadata simhash lsh index")
 	return index, nil
 }
 
@@ -102,6 +103,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 	for _, datasetID := range s.MetadataIndex.Search(query) {
 		metadata, err := s.db.Metadata(datasetID)
 		if err != nil {
+			log.Print(datasetID)
 			panic(err)
 		}
 		results = append(results, &searchResult{
@@ -121,6 +123,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 		len(results),
 		results,
 	})
+	log.Print("handled search")
 }
 
 func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {

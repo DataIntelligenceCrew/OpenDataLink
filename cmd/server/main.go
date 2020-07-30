@@ -11,15 +11,18 @@ import (
 )
 
 const (
-	databasePath = "opendatalink.sqlite"
 	// Containment threshold for joinability index
 	joinabilityThreshold = 0.5
 )
 
 func main() {
-	db, err := database.New(databasePath)
+	path, err := database.Path()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
+	}
+	db, err := database.New(path)
+	if err != nil {
+		panic(err)
 	}
 	defer db.Close()
 
