@@ -62,7 +62,7 @@ func NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount 
 		panic(err)
 	}
 	return IndexBuilder{
-		index: simhashlsh.NewCosineLsh(dimensionCount, hashTableCount, hashValuePerHashTableCount),
+		index:    simhashlsh.NewCosineLsh(dimensionCount, hashTableCount, hashValuePerHashTableCount),
 		fastText: *fasttext.New(path),
 	}
 }
