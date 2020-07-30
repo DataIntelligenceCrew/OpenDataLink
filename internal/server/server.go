@@ -59,7 +59,7 @@ func (s *Server) Install() {
 	http.HandleFunc("/dataset/", s.handleDataset)
 	http.HandleFunc("/joinable-columns", s.handleJoinableColumns)
 
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, req *http.Request) {
@@ -75,7 +75,7 @@ func buildMetadataIndex(db *database.DB) (horizontal.Index, error) {
 	if err != nil {
 		return horizontal.Index{}, err
 	}
-	log.Print("server: built metadata simhash lsh index")
+	log.Print("server: built metadata index")
 	return index, nil
 }
 
@@ -258,7 +258,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 			"lines": func(text string) []string {
 				return strings.Split(text, "\n")
 			},
-		}).ParseFiles("template/base.html", "template/"+page+".html")
+		}).ParseFiles("web/template/base.html", "web/template/"+page+".html")
 		if err != nil {
 			return nil, err
 		}
