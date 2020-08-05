@@ -1,6 +1,6 @@
 {{define "content"}}
   <h2>Results for "{{.Query}}"</h2>
-  <p>{{.NumResults}} results</p>
+  <p>{{len .Results}} results</p>
 
   {{range .Results}}
     <div class="search-snippet">

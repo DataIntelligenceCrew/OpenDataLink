@@ -115,15 +115,9 @@ func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 	}
 
 	s.servePage(w, "search", &struct {
-		Query      string
-		NumResults int
-		Results    []*searchResult
-	}{
-		query,
-		len(results),
-		results,
-	})
-	log.Print("handled search")
+		Query   string
+		Results []*searchResult
+	}{query, results})
 }
 
 func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {
