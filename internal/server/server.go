@@ -58,6 +58,7 @@ func (s *Server) Install() {
 	http.HandleFunc("/search", s.handleSearch)
 	http.HandleFunc("/dataset/", s.handleDataset)
 	http.HandleFunc("/joinable-columns", s.handleJoinableColumns)
+	http.HandleFunc("/unionable-tables", s.handleUnionableTables)
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 }
@@ -144,7 +145,7 @@ func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request) {
-	query, err := s.db.ColumnSketch(req.FormValue("q"))
+	query, err := s.db.ColumnSketch(req.FormValue("id"))
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.NotFound(w, req)
@@ -158,14 +159,14 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 	results := s.joinabilityIndex.Query(
 		query.Minhash, query.DistinctCount, s.joinabilityThreshold, done)
 
-	type searchResult struct {
+	type queryResult struct {
 		DatasetID   string
 		DatasetName string
 		ColumnID    string
 		ColumnName  string
 		Containment float64
 	}
-	var resultData []*searchResult
+	var resultData []*queryResult
 
 	for key := range results {
 		colID := key.(string)
@@ -188,7 +189,7 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 			serverError(w, err)
 			return
 		}
-		resultData = append(resultData, &searchResult{
+		resultData = append(resultData, &queryResult{
 			result.DatasetID,
 			datasetName,
 			result.ColumnID,
@@ -205,11 +206,53 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 		DatasetID   string
 		DatasetName string
 		ColumnName  string
-		Results     []*searchResult
+		Results     []*queryResult
 	}{
 		query.DatasetID,
 		qDatasetName,
 		query.ColumnName,
+		resultData,
+	})
+}
+
+func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request) {
+	queryID := req.FormValue("id")
+
+	queryName, err := s.db.DatasetName(queryID)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	results, err := s.unionableTables(queryID)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	type queryResult struct {
+		DatasetID   string
+		DatasetName string
+	}
+	var resultData []*queryResult
+
+	for _, datasetID := range results {
+		datasetName, err := s.db.DatasetName(datasetID)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		resultData = append(resultData, &queryResult{
+			DatasetID:   datasetID,
+			DatasetName: datasetName,
+		})
+	}
+
+	s.servePage(w, "unionable-tables", &struct {
+		DatasetID   string
+		DatasetName string
+		Results     []*queryResult
+	}{
+		queryID,
+		queryName,
 		resultData,
 	})
 }
@@ -244,6 +287,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		"search",
 		"dataset",
 		"joinable-columns",
+		"unionable-tables",
 	}
 	templates := make(map[string]*template.Template)
 

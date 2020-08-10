@@ -1,0 +1,11 @@
+{{define "content"}}
+  <h2>
+    Unionable tables for <a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a>
+  </h2>
+
+  {{range .Results}}
+    <p><a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a></p>
+  {{else}}
+    <p>No unionable tables.</p>
+  {{end}}
+{{end}}

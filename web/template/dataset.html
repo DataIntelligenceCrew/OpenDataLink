@@ -2,8 +2,14 @@
   <h2>{{.Name}}</h2>
   <p>Updated: {{.UpdatedAt}}</p>
 
+  <ul>
+    <li>
+      <a href="/unionable-tables?id={{.DatasetID}}">Find unionable tables</a>
+    </li>
+  </ul>
+
   <h3>Description</h3>
-  {{range .Description | lines}}
+  {{range lines .Description}}
     <p>{{.}}</p>
   {{end}}
 
@@ -27,7 +33,7 @@
   <p>Click a column to find tables joinable on that column.</p>
   <ul>
     {{range .Columns}}
-      <li><a href="/joinable-columns?q={{.ColumnID}}">{{.ColumnName}}</a></li>
+      <li><a href="/joinable-columns?id={{.ColumnID}}">{{.ColumnName}}</a></li>
     {{end}}
   </ul>
 {{end}}
