@@ -231,18 +231,20 @@ func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request)
 	type queryResult struct {
 		DatasetID   string
 		DatasetName string
+		Alignment   float64
 	}
 	var resultData []*queryResult
 
-	for _, datasetID := range results {
-		datasetName, err := s.db.DatasetName(datasetID)
+	for _, res := range results {
+		datasetName, err := s.db.DatasetName(res.datasetID)
 		if err != nil {
 			serverError(w, err)
 			return
 		}
 		resultData = append(resultData, &queryResult{
-			DatasetID:   datasetID,
+			DatasetID:   res.datasetID,
 			DatasetName: datasetName,
+			Alignment:   res.alignment,
 		})
 	}
 
