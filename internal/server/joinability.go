@@ -8,9 +8,7 @@ import (
 )
 
 type joinabilityResult struct {
-	columnID    string
-	datasetID   string
-	columnName  string
+	*database.ColumnSketch
 	containment float64
 }
 
@@ -42,12 +40,7 @@ func (s *Server) joinableColumns(query *database.ColumnSketch) ([]*joinabilityRe
 		})
 		results = append(results, nil)
 		copy(results[i+1:], results[i:])
-		results[i] = &joinabilityResult{
-			res.ColumnID,
-			res.DatasetID,
-			res.ColumnName,
-			containment,
-		}
+		results[i] = &joinabilityResult{res, containment}
 	}
 	return results, nil
 }

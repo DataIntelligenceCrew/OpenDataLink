@@ -176,16 +176,16 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 	var resultData []*queryResult
 
 	for _, res := range results {
-		datasetName, err := s.db.DatasetName(res.datasetID)
+		datasetName, err := s.db.DatasetName(res.DatasetID)
 		if err != nil {
 			serverError(w, err)
 			return
 		}
 		resultData = append(resultData, &queryResult{
-			res.datasetID,
+			res.DatasetID,
 			datasetName,
-			res.columnID,
-			res.columnName,
+			res.ColumnID,
+			res.ColumnName,
 			res.containment,
 		})
 	}
