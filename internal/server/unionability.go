@@ -29,7 +29,7 @@ func (s *Server) unionableTables(datasetID string) ([]*unionabilityResult, error
 			return nil, err
 		}
 		alignment := unionabilityScore(query, candidate)
-		// Insert result while maintaining sorted order.
+		// Keep results sorted in descending order by alignment.
 		i := sort.Search(len(results), func(i int) bool {
 			return results[i].alignment <= alignment
 		})

@@ -164,10 +164,7 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 		}
 		return
 	}
-	done := make(chan struct{})
-	defer close(done)
-	results := s.joinabilityIndex.Query(
-		query.Minhash, query.DistinctCount, s.joinabilityThreshold, done)
+	results, err := s.joinableColumns(query)
 
 	type queryResult struct {
 		DatasetID   string
@@ -178,35 +175,21 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 	}
 	var resultData []*queryResult
 
-	for key := range results {
-		colID := key.(string)
-		// Don't include query in results
-		if colID == query.ColumnID {
-			continue
-		}
-		result, err := s.db.ColumnSketch(colID)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		containment := lshensemble.Containment(
-			query.Minhash, result.Minhash, query.DistinctCount, result.DistinctCount)
-		if containment < s.joinabilityThreshold {
-			continue
-		}
-		datasetName, err := s.db.DatasetName(result.DatasetID)
+	for _, res := range results {
+		datasetName, err := s.db.DatasetName(res.datasetID)
 		if err != nil {
 			serverError(w, err)
 			return
 		}
 		resultData = append(resultData, &queryResult{
-			result.DatasetID,
+			res.datasetID,
 			datasetName,
-			result.ColumnID,
-			result.ColumnName,
-			containment,
+			res.columnID,
+			res.columnName,
+			res.containment,
 		})
 	}
+
 	qDatasetName, err := s.db.DatasetName(query.DatasetID)
 	if err != nil {
 		serverError(w, err)
@@ -230,11 +213,6 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request) {
 	queryID := req.FormValue("id")
 
-	queryName, err := s.db.DatasetName(queryID)
-	if err != nil {
-		serverError(w, err)
-		return
-	}
 	results, err := s.unionableTables(queryID)
 	if err != nil {
 		serverError(w, err)
@@ -254,12 +232,17 @@ func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request)
 			return
 		}
 		resultData = append(resultData, &queryResult{
-			DatasetID:   res.datasetID,
-			DatasetName: datasetName,
-			Alignment:   res.alignment,
+			res.datasetID,
+			datasetName,
+			res.alignment,
 		})
 	}
 
+	queryName, err := s.db.DatasetName(queryID)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
 	s.servePage(w, "unionable-tables", &struct {
 		PageTitle   string
 		DatasetID   string
