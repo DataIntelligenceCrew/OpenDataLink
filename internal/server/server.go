@@ -68,7 +68,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, req *http.Request) {
 		http.NotFound(w, req)
 		return
 	}
-	s.servePage(w, "index", nil)
+	s.servePage(w, "index", &struct{ PageTitle string }{"Open Data Link"})
 }
 
 func buildMetadataIndex(db *database.DB) (horizontal.Index, error) {
@@ -116,9 +116,14 @@ func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 	}
 
 	s.servePage(w, "search", &struct {
-		Query   string
-		Results []*searchResult
-	}{query, results})
+		PageTitle string
+		Query     string
+		Results   []*searchResult
+	}{
+		query + " - Open Data Link",
+		query,
+		results,
+	})
 }
 
 func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {
@@ -139,9 +144,14 @@ func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	s.servePage(w, "dataset", &struct {
+		PageTitle string
 		*database.Metadata
 		Columns []*database.ColumnSketch
-	}{meta, cols})
+	}{
+		meta.Name + " - Open Data Link",
+		meta,
+		cols,
+	})
 }
 
 func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request) {
@@ -203,11 +213,13 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	s.servePage(w, "joinable-columns", &struct {
+		PageTitle   string
 		DatasetID   string
 		DatasetName string
 		ColumnName  string
 		Results     []*queryResult
 	}{
+		"Joinable tables for " + qDatasetName + " - Open Data Link",
 		query.DatasetID,
 		qDatasetName,
 		query.ColumnName,
@@ -249,10 +261,12 @@ func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request)
 	}
 
 	s.servePage(w, "unionable-tables", &struct {
+		PageTitle   string
 		DatasetID   string
 		DatasetName string
 		Results     []*queryResult
 	}{
+		"Unionable tables for " + queryName + " - Open Data Link",
 		queryID,
 		queryName,
 		resultData,
