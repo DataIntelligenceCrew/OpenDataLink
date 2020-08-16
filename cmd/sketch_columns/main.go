@@ -86,19 +86,9 @@ func sketchDataset(path, datasetID string) (*tableSketch, error) {
 	return &tableSketch, nil
 }
 
-func writeSketch(db *sql.DB, sketch *tableSketch) {
-	stmt, err := db.Prepare(`
-	INSERT INTO column_sketches
-	(column_id, dataset_id, column_name, distinct_count, minhash)
-	VALUES (?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer stmt.Close()
-
+func writeSketch(stmt *sql.Stmt, sketch *tableSketch) {
 	for i, colSketch := range sketch.columnSketches {
-		_, err = stmt.Exec(
+		_, err := stmt.Exec(
 			fmt.Sprint(sketch.datasetID, "-", i),
 			sketch.datasetID,
 			colSketch.columnName,
@@ -164,12 +154,21 @@ func main() {
 	}
 	defer db.Close()
 
+	insertStmt, err := db.Prepare(`
+	INSERT INTO column_sketches
+	(column_id, dataset_id, column_name, distinct_count, minhash)
+	VALUES (?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer insertStmt.Close()
+
 	for range files {
 		if sketch := <-out; sketch != nil {
-			writeSketch(db, sketch)
+			writeSketch(insertStmt, sketch)
 		}
 	}
-	log.Println("done writing sketches")
 
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
