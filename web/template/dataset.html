@@ -29,11 +29,21 @@
   <h3>Source</h3>
   <p><a href="{{.Permalink}}">{{.Permalink}}</a></p>
 
-  <h3>Columns</h3>
+  <h3>Data Preview</h3>
   <p>Click a column to find tables joinable on that column.</p>
-  <ul>
-    {{range .Columns}}
-      <li><a href="/joinable-columns?id={{.ColumnID}}">{{.ColumnName}}</a></li>
+
+  <table>
+    <tr>
+      {{range .Columns}}
+        <th><a href="/joinable-columns?id={{.ColumnID}}">{{.ColumnName}}</a></th>
+      {{end}}
+    </tr>
+    {{range $row, $v := (index .Columns 0).Sample}}
+      <tr>
+        {{range $.Columns}}
+          <td>{{index .Sample $row}}</td>
+        {{end}}
+      </tr>
     {{end}}
-  </ul>
+  </table>
 {{end}}

@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -40,24 +41,27 @@ type ColumnSketch struct {
 	ColumnName    string
 	DistinctCount int
 	Minhash       []uint64
+	Sample        []string
 }
 
 // ColumnSketch returns the ColumnSketch of the given column
 func (db *DB) ColumnSketch(columnID string) (*ColumnSketch, error) {
 	c := ColumnSketch{ColumnID: columnID}
-	var minhash []byte
+	var minhash, sample []byte
 
 	err := db.QueryRow(`
-	SELECT dataset_id, column_name, distinct_count, minhash
+	SELECT dataset_id, column_name, distinct_count, minhash, sample
 	FROM column_sketches
 	WHERE column_id = ?`, columnID).Scan(
-		&c.DatasetID, &c.ColumnName, &c.DistinctCount, &minhash)
+		&c.DatasetID, &c.ColumnName, &c.DistinctCount, &minhash, &sample)
 	if err != nil {
 		return nil, err
 	}
 
-	c.Minhash, err = lshensemble.BytesToSig(minhash)
-	if err != nil {
+	if c.Minhash, err = lshensemble.BytesToSig(minhash); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(sample, &c.Sample); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -68,7 +72,7 @@ func (db *DB) DatasetColumns(datasetID string) ([]*ColumnSketch, error) {
 	var cols []*ColumnSketch
 
 	rows, err := db.Query(`
-	SELECT column_id, column_name, distinct_count, minhash
+	SELECT column_id, column_name, distinct_count, minhash, sample
 	FROM column_sketches
 	WHERE dataset_id = ?`, datasetID)
 	if err != nil {
@@ -78,14 +82,17 @@ func (db *DB) DatasetColumns(datasetID string) ([]*ColumnSketch, error) {
 
 	for rows.Next() {
 		c := ColumnSketch{DatasetID: datasetID}
-		var minhash []byte
+		var minhash, sample []byte
 
-		err := rows.Scan(&c.ColumnID, &c.ColumnName, &c.DistinctCount, &minhash)
+		err := rows.Scan(
+			&c.ColumnID, &c.ColumnName, &c.DistinctCount, &minhash, &sample)
 		if err != nil {
 			return nil, err
 		}
-		c.Minhash, err = lshensemble.BytesToSig(minhash)
-		if err != nil {
+		if c.Minhash, err = lshensemble.BytesToSig(minhash); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(sample, &c.Sample); err != nil {
 			return nil, err
 		}
 		cols = append(cols, &c)

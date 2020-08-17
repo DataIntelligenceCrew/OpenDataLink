@@ -1,6 +1,7 @@
 body {
   margin: auto;
-  max-width: 60em;
+  margin-bottom: 1em;
+  max-width: 72em;
   padding: 0 1em;
   font-family: sans-serif;
 }
@@ -25,6 +26,21 @@ a {
 }
 a:hover {
   text-decoration: underline;
+}
+table {
+  display: block;
+  overflow: auto;
+  border-collapse: collapse;
+}
+tr:nth-child(even) {
+  background-color: #eee;
+}
+th, td {
+  border: thin solid #ddd;
+  padding: 6px;
+}
+td {
+  white-space: nowrap;
 }
 
 .search-snippet {

@@ -8,6 +8,8 @@ CREATE TABLE column_sketches (
     -- An approximate distinct count of the values.
     distinct_count INT NOT NULL,
     -- The minhash signature of the column.
-    minhash BLOB NOT NULL
+    minhash BLOB NOT NULL,
+    -- A sample of values encoded as a JSON array.
+    sample TEXT NOT NULL
 );
 CREATE INDEX column_sketches_dataset_idx ON column_sketches(dataset_id);

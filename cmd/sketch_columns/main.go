@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -25,6 +26,8 @@ const (
 	// Minhash parameters
 	mhSeed = 42
 	mhSize = 256
+	// Number of sample data values
+	sampleSize = 20
 )
 
 type tableSketch struct {
@@ -39,11 +42,13 @@ func (s *tableSketch) update(record []string) {
 				columnName:  v,
 				minhash:     lshensemble.NewMinhash(mhSeed, mhSize),
 				hyperloglog: hyperloglog.New(),
+				sample:      make([]string, 0, sampleSize),
 			})
 		}
-	}
-	for i, v := range record {
-		s.columnSketches[i].update([]byte(v))
+	} else {
+		for i, v := range record {
+			s.columnSketches[i].update(v)
+		}
 	}
 }
 
@@ -51,11 +56,17 @@ type columnSketch struct {
 	columnName  string
 	minhash     *lshensemble.Minhash
 	hyperloglog *hyperloglog.Sketch
+	sample      []string
 }
 
-func (s *columnSketch) update(v []byte) {
-	s.minhash.Push(v)
-	s.hyperloglog.Insert(v)
+func (s *columnSketch) update(v string) {
+	b := []byte(v)
+	s.minhash.Push(b)
+	s.hyperloglog.Insert(b)
+
+	if len(s.sample) < sampleSize {
+		s.sample = append(s.sample, v)
+	}
 }
 
 func sketchDataset(path, datasetID string) (*tableSketch, error) {
@@ -86,18 +97,24 @@ func sketchDataset(path, datasetID string) (*tableSketch, error) {
 	return &tableSketch, nil
 }
 
-func writeSketch(stmt *sql.Stmt, sketch *tableSketch) {
-	for i, colSketch := range sketch.columnSketches {
-		_, err := stmt.Exec(
+func writeSketch(stmt *sql.Stmt, sketch *tableSketch) error {
+	for i, col := range sketch.columnSketches {
+		sample, err := json.Marshal(col.sample)
+		if err != nil {
+			return err
+		}
+		_, err = stmt.Exec(
 			fmt.Sprint(sketch.datasetID, "-", i),
 			sketch.datasetID,
-			colSketch.columnName,
-			colSketch.hyperloglog.Estimate(),
-			lshensemble.SigToBytes(colSketch.minhash.Signature()))
+			col.columnName,
+			col.hyperloglog.Estimate(),
+			lshensemble.SigToBytes(col.minhash.Signature()),
+			sample)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 	}
+	return nil
 }
 
 func sketchWorker(jobs <-chan string, out chan<- *tableSketch) {
@@ -156,8 +173,8 @@ func main() {
 
 	insertStmt, err := db.Prepare(`
 	INSERT INTO column_sketches
-	(column_id, dataset_id, column_name, distinct_count, minhash)
-	VALUES (?, ?, ?, ?, ?)
+	(column_id, dataset_id, column_name, distinct_count, minhash, sample)
+	VALUES (?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		log.Fatal(err)
@@ -166,7 +183,9 @@ func main() {
 
 	for range files {
 		if sketch := <-out; sketch != nil {
-			writeSketch(insertStmt, sketch)
+			if err := writeSketch(insertStmt, sketch); err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 
