@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/ekzhu/lshensemble"
 	"opendatalink/internal/database"
@@ -17,10 +18,11 @@ import (
 type Server struct {
 	devMode              bool
 	db                   *database.DB
-	templates            map[string]*template.Template
 	joinabilityThreshold float64
 	joinabilityIndex     *lshensemble.LshEnsemble
 	MetadataIndex        horizontal.Index
+	mux                  sync.Mutex // Guards access to templates
+	templates            map[string]*template.Template
 }
 
 // Config is used to configure the server.
@@ -263,6 +265,8 @@ func serverError(w http.ResponseWriter, err error) {
 
 func (s *Server) servePage(w http.ResponseWriter, page string, data interface{}) {
 	if s.devMode {
+		s.mux.Lock()
+		defer s.mux.Unlock()
 		var err error
 		if s.templates, err = parseTemplates(); err != nil {
 			serverError(w, err)
