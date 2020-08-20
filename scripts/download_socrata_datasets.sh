@@ -35,6 +35,6 @@ while true; do
         printf '%s' "$resource" | jq '.' > "$id/metadata.json"
         domain=$(printf '%s' "$resource" | jq -r '.metadata.domain')
         download_url="$domain/api/views/$id/rows.csv?accessType=DOWNLOAD"
-        curl --no-progress-meter -f -o "$id/rows.csv" "$download_url"
+        curl --no-progress-meter -fL -o "$id/rows.csv" "$download_url"
     done
 done
