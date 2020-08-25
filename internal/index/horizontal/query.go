@@ -4,20 +4,20 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/fnargesian/simhash-lsh"
 	"github.com/justinfargnoli/go-fasttext"
+	"github.com/justinfargnoli/lshforest/pkg"
 )
 
 // Index is a read only wrapper of simhashlsh.CosineLsh
 type Index struct {
-	index    *simhashlsh.CosineLsh
+	index    *lshforest.LSHForest
 	fastText fasttext.FastText
 }
 
 // QueryRaw finds the ids of approximate nearest neighbour candidates, in
 // un-sorted order, given the query point.
-func (i Index) QueryRaw(query []float64) []string {
-	return i.index.Query(query)
+func (i Index) QueryRaw(query *[]float64, topK uint) (*[]interface{}, error) {
+	return i.index.Query(query, topK)
 }
 
 // queryResult is the deserialized result of an element of Index.Query()
@@ -33,22 +33,26 @@ func buildQueryResult(query string) queryResult {
 
 // queryEmbeddingVector finds the queryResult's of approximate nearest neighbour
 // candidates, in un-sorted order, given the query point.
-func (i Index) queryEmbeddingVector(query []float64) []queryResult {
+func (i Index) queryEmbeddingVector(query *[]float64) (*[]queryResult, error) {
 	var queryResults []queryResult
-	for _, v := range i.QueryRaw(query) {
-		queryResults = append(queryResults, buildQueryResult(v))
+	results, err := i.QueryRaw(query, 30)
+	if err != nil {
+		return nil, err
 	}
-	return queryResults
+	for _, v := range *results {
+		queryResults = append(queryResults, buildQueryResult(v.(string)))
+	}
+	return &queryResults, nil
 }
 
 // queryWord finds the queryResult's of approximate nearest neighbour
 // candidates, in un-sorted order, given the query point.
-func (i Index) queryWord(word string) ([]queryResult, error) {
+func (i Index) queryWord(word string) (*[]queryResult, error) {
 	embeddingVector, err := i.fastText.EmbeddingVector(word)
 	if err != nil {
 		return nil, err
 	}
-	return i.queryEmbeddingVector(embeddingVector), nil
+	return i.queryEmbeddingVector(&embeddingVector)
 }
 
 // query returns the datasetsID which are contain semantically similar data
@@ -61,7 +65,7 @@ func (i Index) query(query string) *[]string {
 		if err != nil {
 			continue
 		}
-		for _, v := range wordResults {
+		for _, v := range *wordResults {
 			datasetIDs = append(datasetIDs, v.datasetID)
 		}
 	}

@@ -7,13 +7,13 @@ import (
 
 	"opendatalink/internal/database"
 
-	"github.com/fnargesian/simhash-lsh"
 	"github.com/justinfargnoli/go-fasttext"
+	"github.com/justinfargnoli/lshforest/pkg"
 )
 
 const dimensionCount = fasttext.Dim
-const hashTableCount = 40
-const hashValuePerHashTableCount = 10
+const hashTableCount = 256
+const hashValuePerHashTableCount = 64
 
 func fastTextPath() (string, error) {
 	path := os.Getenv("FAST_TEXT_DB")
@@ -25,7 +25,7 @@ func fastTextPath() (string, error) {
 
 // BuildMetadataIndex builds a LSH index using github.com/fnargesian/simhash-lsh
 func BuildMetadataIndex(db *database.DB) (Index, error) {
-	indexBuilder := NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount)
+	indexBuilder := NewIndexBuilder(dimensionCount)
 
 	metadataIterator, err := db.NewMetadataIterator()
 	if err != nil {
@@ -47,22 +47,22 @@ func BuildMetadataIndex(db *database.DB) (Index, error) {
 
 // IndexBuilder is a write only wrapper of simhashlsh.CosineLsh
 type IndexBuilder struct {
-	index    *simhashlsh.CosineLsh
+	index    *lshforest.LSHForest
 	fastText fasttext.FastText
 }
 
 // NewIndexBuilder constructs an IndexBuilder
 //
-// dimensionCount, hashTableCount, hashValuePerHashTableCount  of
-// NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount)
+// dimension, hashTableCount, hashValuePerHashTableCount  of
+// NewIndexBuilder(dimension, hashTableCount, hashValuePerHashTableCount)
 // map to simhash.NewCosinLsh(dim, l m)'s dim, l, and m respectivly
-func NewIndexBuilder(dimensionCount, hashTableCount, hashValuePerHashTableCount int) IndexBuilder {
+func NewIndexBuilder(dimension uint) IndexBuilder {
 	path, err := fastTextPath()
 	if err != nil {
 		panic(err)
 	}
 	return IndexBuilder{
-		index:    simhashlsh.NewCosineLsh(dimensionCount, hashTableCount, hashValuePerHashTableCount),
+		index:    lshforest.New(5, dimension, dimension, lshforest.Cosine),
 		fastText: *fasttext.New(path),
 	}
 }
@@ -73,8 +73,8 @@ func (indexBuilder IndexBuilder) ToIndex() Index {
 }
 
 // Insert adds the embeddingVector and id to the index
-func (indexBuilder IndexBuilder) Insert(point Point) {
-	indexBuilder.index.Insert(point.EmbeddingVector, point.ID())
+func (indexBuilder IndexBuilder) Insert(point *Point) {
+	indexBuilder.index.Insert(&point.EmbeddingVector, point.ID())
 }
 
 // InsertZip zips the embeddingVectors and IDs array into a one dimensional
@@ -85,7 +85,7 @@ func (indexBuilder IndexBuilder) InsertZip(embeddingVectors *[][]float64, datase
 		panic(fmt.Sprintf("(len(embeddingVectors) = %v) != (len(IDs) = %v)", len(*embeddingVectors), len(*IDs)))
 	}
 	for i := range *embeddingVectors {
-		indexBuilder.Insert(Point{(*embeddingVectors)[i], datasetID, (*IDs)[i]})
+		indexBuilder.Insert(&Point{(*embeddingVectors)[i], datasetID, (*IDs)[i]})
 	}
 }
 
@@ -123,7 +123,7 @@ func (indexBuilder IndexBuilder) InsertName(metadata *database.Metadata) {
 	if err != nil {
 		return
 	}
-	indexBuilder.Insert(Point{nameEmbeddingVector, metadata.DatasetID, metadata.Name})
+	indexBuilder.Insert(&Point{nameEmbeddingVector, metadata.DatasetID, metadata.Name})
 }
 
 // InsertDescription adds Metadata.Description to index
