@@ -47,7 +47,9 @@ func (s *tableSketch) update(record []string) {
 		}
 	} else {
 		for i, v := range record {
-			s.columnSketches[i].update(v)
+			if v != "" {
+				s.columnSketches[i].update(v)
+			}
 		}
 	}
 }
