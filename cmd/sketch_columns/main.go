@@ -74,7 +74,7 @@ func (s *columnSketch) update(v string) {
 func sketchDataset(path, datasetID string) (*tableSketch, error) {
 	csvfile, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error sketching %v: %w", datasetID, err)
 	}
 	defer csvfile.Close()
 
@@ -89,7 +89,7 @@ func sketchDataset(path, datasetID string) (*tableSketch, error) {
 			if err == io.EOF {
 				break
 			}
-			return nil, err
+			return nil, fmt.Errorf("error sketching %v: %w", datasetID, err)
 		}
 		sketch.update(record)
 	}
@@ -103,7 +103,7 @@ func writeSketch(stmt *sql.Stmt, sketch *tableSketch) error {
 	for i, col := range sketch.columnSketches {
 		sample, err := json.Marshal(col.sample)
 		if err != nil {
-			return err
+			return fmt.Errorf("error writing sketch %v: %v", sketch.datasetID, err)
 		}
 		_, err = stmt.Exec(
 			fmt.Sprint(sketch.datasetID, "-", i),
@@ -113,7 +113,7 @@ func writeSketch(stmt *sql.Stmt, sketch *tableSketch) error {
 			lshensemble.SigToBytes(col.minhash.Signature()),
 			sample)
 		if err != nil {
-			return err
+			return fmt.Errorf("error writing sketch %v: %v", sketch.datasetID, err)
 		}
 	}
 	return nil
