@@ -23,7 +23,7 @@ func (s *Server) unionableTables(datasetID string) ([]*unionabilityResult, error
 	}
 	results := make([]*unionabilityResult, 0, len(candidates))
 
-	for _, datasetID := range candidates {
+	for datasetID := range candidates {
 		candidate, err := s.db.DatasetColumns(datasetID)
 		if err != nil {
 			return nil, err
@@ -40,17 +40,27 @@ func (s *Server) unionableTables(datasetID string) ([]*unionabilityResult, error
 	return results, nil
 }
 
-func (s *Server) unionCandidates(table []*database.ColumnSketch) ([]string, error) {
+func (s *Server) unionCandidates(table []*database.ColumnSketch) (map[string]bool, error) {
+	candidates := make(map[string]bool)
+	unionJoinabilityCandidates(table, s.joinabilityIndex, candidates)
+	return candidates, nil
+}
+
+func unionJoinabilityCandidates(
+	table []*database.ColumnSketch,
+	index *lshensemble.LshEnsemble,
+	candidates map[string]bool,
+) {
 	datasetID := table[0].DatasetID
 	// Maps dataset IDs to number of joinability query results they appear in.
-	joinabilityResults := make(map[string]int)
+	counts := make(map[string]int)
 	// Used to avoid counting the same column multiple times if it appears in
 	// the results for multiple queries.
 	addedCols := make(map[string]bool)
 
 	for _, c := range table {
 		done := make(chan struct{})
-		results := s.joinabilityIndex.Query(c.Minhash, c.DistinctCount, 0.5, done)
+		results := index.Query(c.Minhash, c.DistinctCount, 0.5, done)
 
 		// Used to avoid counting the same dataset multiple times for one query.
 		added := make(map[string]bool)
@@ -62,7 +72,7 @@ func (s *Server) unionCandidates(table []*database.ColumnSketch) ([]string, erro
 				continue
 			}
 			if !added[resID] && !addedCols[colID] {
-				joinabilityResults[resID]++
+				counts[resID]++
 			}
 			added[resID] = true
 			addedCols[colID] = true
@@ -70,14 +80,32 @@ func (s *Server) unionCandidates(table []*database.ColumnSketch) ([]string, erro
 		close(done)
 	}
 
-	var results []string
-	for dataset, count := range joinabilityResults {
+	for dataset, count := range counts {
 		if float64(count)/float64(len(table)) >= 0.4 {
-			results = append(results, dataset)
+			candidates[dataset] = true
 		}
 	}
-	return results, nil
 }
+
+/*
+func unionColNameCandidates(
+	table []*database.ColumnSketch,
+	db *database.DB,
+	candidates map[string]bool,
+) error {
+	datasetID := table[0].DatasetID
+	// Maps dataset IDs to number of column names in common with query.
+	counts := make(map[string]int)
+
+	for _, c := range table {
+		rows, err := db.Query(`
+		SELECT dataset_id,
+		`)
+	}
+
+	return nil
+}
+*/
 
 // unionabilityScore returns a score between 0 and 1 that represents the
 // unionability of the candidate table with the query table.
@@ -110,9 +138,7 @@ func unionabilityScore(query, candidate []*database.ColumnSketch) float64 {
 			} else {
 				q, x = c2, c1
 			}
-			cont := lshensemble.Containment(
-				q.Minhash, x.Minhash, q.DistinctCount, x.DistinctCount)
-			if cont > bestCont {
+			if cont := containment(q, x); cont > bestCont {
 				best, bestCont = c2, cont
 			}
 		}
@@ -133,4 +159,41 @@ func unionabilityScore(query, candidate []*database.ColumnSketch) float64 {
 		alignment++
 	}
 	return float64(alignment) / float64(len(query))
+}
+
+func sampleContainment(db *database.DB) ([]float64, error) {
+	rows, err := db.Query(`
+	SELECT column_id FROM column_sketches
+	ORDER BY RANDOM() LIMIT 1000`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columns := make([]*database.ColumnSketch, 0, 1000)
+
+	for rows.Next() {
+		var columnID string
+		if err := rows.Scan(&columnID); err != nil {
+			return nil, err
+		}
+		col, err := db.ColumnSketch(columnID)
+		if err != nil {
+			return nil, err
+		}
+		columns = append(columns, col)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	contSample := make([]float64, 0, 1000000)
+
+	for _, q := range columns {
+		for _, x := range columns {
+			contSample = append(contSample, containment(q, x))
+		}
+	}
+	sort.Float64s(contSample)
+	return contSample, nil
 }

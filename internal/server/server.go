@@ -19,6 +19,7 @@ type Server struct {
 	db                   *database.DB
 	joinabilityThreshold float64
 	joinabilityIndex     *lshensemble.LshEnsemble
+	containmentSample    []float64
 	mux                  sync.Mutex // Guards access to templates
 	templates            map[string]*template.Template
 }
@@ -38,12 +39,17 @@ func New(cfg *Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	containmentSample, err := sampleContainment(cfg.DB)
+	if err != nil {
+		return nil, err
+	}
 	return &Server{
 		devMode:              cfg.DevMode,
 		db:                   cfg.DB,
 		templates:            templates,
 		joinabilityThreshold: cfg.JoinabilityThreshold,
 		joinabilityIndex:     cfg.JoinabilityIndex,
+		containmentSample:    containmentSample,
 	}, nil
 }
 
