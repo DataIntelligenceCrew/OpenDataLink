@@ -60,9 +60,11 @@ type columnSketch struct {
 }
 
 func (s *columnSketch) update(v string) {
-	b := []byte(v)
-	s.minhash.Push(b)
-	s.hyperloglog.Insert(b)
+	if v != "" {
+		b := []byte(v)
+		s.minhash.Push(b)
+		s.hyperloglog.Insert(b)
+	}
 
 	if len(s.sample) < sampleSize {
 		s.sample = append(s.sample, v)
@@ -76,25 +78,25 @@ func sketchDataset(path, datasetID string) (*tableSketch, error) {
 	}
 	defer csvfile.Close()
 
-	tableSketch := tableSketch{datasetID: datasetID}
+	sketch := tableSketch{datasetID: datasetID}
 	r := csv.NewReader(csvfile)
 	r.LazyQuotes = true
 	r.ReuseRecord = true
 
 	for {
 		record, err := r.Read()
-		if err == io.EOF {
-			break
-		}
 		if err != nil {
+			if err == io.EOF {
+				break
+			}
 			return nil, err
 		}
-		tableSketch.update(record)
+		sketch.update(record)
 	}
-	if tableSketch.columnSketches == nil {
+	if sketch.columnSketches == nil {
 		return nil, nil
 	}
-	return &tableSketch, nil
+	return &sketch, nil
 }
 
 func writeSketch(stmt *sql.Stmt, sketch *tableSketch) error {
