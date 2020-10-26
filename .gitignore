@@ -1,18 +1,4 @@
-# Temporary Files
-zip_file.zip
-wiki-news-300d-1M-subword.vec
+/datasets/
 
-# Datasets
-datasets/
-metadata/
-
-# Binaries
-build_fast_text
-sketch_columns
-
-# SQLite DB
-opendatalink.sqlite3
-opendatalink.sqlite3-journal
-fast_text.sqlite3
-fast_text.sqlite3-journal
-test/setup_justin.sh
+opendatalink.sqlite
+fasttext.sqlite
