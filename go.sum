@@ -1,3 +1,5 @@
+github.com/DataIntelligenceCrew/go-faiss v0.0.0-20201025214133-7ad91cff262b h1:FAuDqHuBM7jrYte8BHvnpE25LG4kJM4RB6igzEG83UA=
+github.com/DataIntelligenceCrew/go-faiss v0.0.0-20201025214133-7ad91cff262b/go.mod h1:4Gi7G3PF78IwZigTL2M1AJXOaAgxyL66vCqUYVaNgwk=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/PuerkitoBio/goquery v1.5.1/go.mod h1:GsLWisAFVj4WgDibEWF4pvYnkVQBpKBKeU+7zCJoLcc=
 github.com/andybalholm/cascadia v1.1.0/go.mod h1:GsXiBklL0woXo1j/WYWtSYYC4ouU9PqHO0sqidkEA4Y=
@@ -16,6 +18,8 @@ github.com/dgryski/go-minhash v0.0.0-20190315135803-ad340ca03076 h1:EB7M2v8Svo3k
 github.com/dgryski/go-minhash v0.0.0-20190315135803-ad340ca03076/go.mod h1:VBi0XHpFy0xiMySf6YpVbRqrupW4RprJ5QTyN+XvGSM=
 github.com/dgryski/go-spooky v0.0.0-20170606183049-ed3d087f40e2 h1:lx1ZQgST/imDhmLpYDma1O3Cx9L+4Ie4E8S2RjFPQ30=
 github.com/dgryski/go-spooky v0.0.0-20170606183049-ed3d087f40e2/go.mod h1:hgHYKsoIw7S/hlWtP7wD1wZ7SX1jPTtKko5X9jrOgPQ=
+github.com/ekzhu/go-fasttext v0.0.0-20201025042330-f2eaae881dec h1:yJcfFusRSSd87cjdGqRh0+wnr2qHK3+KEwCrAq6s+GQ=
+github.com/ekzhu/go-fasttext v0.0.0-20201025042330-f2eaae881dec/go.mod h1:FxT1wp3IuIoPoj6nW/Yfc4by22JHN2vZAKNii8TOA3w=
 github.com/ekzhu/lshensemble v1.1.0 h1:qxuckiF7m1ARGe8zxyqmzWFgpNVAsORbatF5XIj/oYc=
 github.com/ekzhu/lshensemble v1.1.0/go.mod h1:9O+7M8zbVXy2WMyTT0zgia+rsQXrX0gB9CihuFwwRK8=
 github.com/fnargesian/simhash-lsh v0.0.0-20170609134222-101771fa42e3 h1:MfHMYupD/2u0qdJc45/WumCTgEFMBJF59ouoE5W1hFE=

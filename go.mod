@@ -3,9 +3,11 @@ module opendatalink
 go 1.14
 
 require (
+	github.com/DataIntelligenceCrew/go-faiss v0.0.0-20201025214133-7ad91cff262b
 	github.com/axiomhq/hyperloglog v0.0.0-20191112132149-a4c4c47bc57f
 	github.com/dgryski/go-minhash v0.0.0-20190315135803-ad340ca03076 // indirect
 	github.com/dgryski/go-spooky v0.0.0-20170606183049-ed3d087f40e2 // indirect
+	github.com/ekzhu/go-fasttext v0.0.0-20201025042330-f2eaae881dec
 	github.com/ekzhu/lshensemble v1.1.0
 	github.com/fnargesian/simhash-lsh v0.0.0-20170609134222-101771fa42e3
 	github.com/justinfargnoli/go-fasttext v0.0.0-20200715213243-a12b86aebc0e
