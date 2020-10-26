@@ -18,3 +18,10 @@ CREATE TABLE metadata (
     -- Permanent link of the dataset.
     permalink TEXT NOT NULL
 );
+
+CREATE TABLE metadata_sketches (
+    -- The Socrata dataset four-by-four.
+    dataset_id TEXT NOT NULL PRIMARY KEY,
+    -- Embedding vector.
+    emb BLOB NOT NULL
+);
