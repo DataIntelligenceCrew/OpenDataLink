@@ -1,5 +1,5 @@
-// Command extract_metadata extracts metadata from JSON files and stores it in
-// the metadata table of the Open Data Link database.
+// Command process_metadata creates metadata embedding vectors and stores the
+// metadata and the vectors in the Open Data Link database.
 package main
 
 import (

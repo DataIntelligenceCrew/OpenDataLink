@@ -1,3 +1,5 @@
+// Command sketch_columns sketches dataset columns and stores the sketches in
+// the Open Data Link database.
 package main
 
 import (
