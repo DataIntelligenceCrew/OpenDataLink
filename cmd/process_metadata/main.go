@@ -13,11 +13,11 @@ import (
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
+	"opendatalink/internal/config"
 )
 
 const (
-	datasetsDir  = "datasets"
-	databasePath = "opendatalink.sqlite"
+	datasetsDir = "datasets"
 )
 
 type metadata struct {
@@ -66,7 +66,7 @@ func removeDuplicates(s []string) []string {
 }
 
 func main() {
-	db, err := sql.Open("sqlite3", databasePath)
+	db, err := sql.Open("sqlite3", config.DatabasePath())
 	if err != nil {
 		log.Fatal(err)
 	}

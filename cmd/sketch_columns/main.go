@@ -20,11 +20,11 @@ import (
 	"github.com/axiomhq/hyperloglog"
 	"github.com/ekzhu/lshensemble"
 	_ "github.com/mattn/go-sqlite3"
+	"opendatalink/internal/config"
 )
 
 const (
-	datasetsDir  = "datasets"
-	databasePath = "opendatalink.sqlite"
+	datasetsDir = "datasets"
 	// Minhash parameters
 	mhSeed = 42
 	mhSize = 256
@@ -169,7 +169,7 @@ func main() {
 	}
 	close(jobs)
 
-	db, err := sql.Open("sqlite3", databasePath)
+	db, err := sql.Open("sqlite3", config.DatabasePath())
 	if err != nil {
 		log.Fatal(err)
 	}

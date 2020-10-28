@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	_ "github.com/mattn/go-sqlite3"
+	"opendatalink/internal/config"
 	"opendatalink/internal/database"
 	"opendatalink/internal/index"
 	"opendatalink/internal/server"
@@ -16,13 +17,9 @@ const (
 )
 
 func main() {
-	path, err := database.Path()
+	db, err := database.New(config.DatabasePath())
 	if err != nil {
-		panic(err)
-	}
-	db, err := database.New(path)
-	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	defer db.Close()
 
