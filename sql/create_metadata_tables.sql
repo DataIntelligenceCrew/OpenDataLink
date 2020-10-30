@@ -19,7 +19,7 @@ CREATE TABLE metadata (
     permalink TEXT NOT NULL
 );
 
-CREATE TABLE metadata_sketches (
+CREATE TABLE metadata_vectors (
     -- The Socrata dataset four-by-four.
     dataset_id TEXT NOT NULL PRIMARY KEY,
     -- Embedding vector.
