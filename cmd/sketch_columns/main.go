@@ -175,7 +175,12 @@ func main() {
 	}
 	defer db.Close()
 
-	insertStmt, err := db.Prepare(`
+	tx, err := db.Begin()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	insertStmt, err := tx.Prepare(`
 	INSERT INTO column_sketches
 	(column_id, dataset_id, column_name, distinct_count, minhash, sample)
 	VALUES (?, ?, ?, ?, ?, ?)
@@ -192,6 +197,7 @@ func main() {
 			}
 		}
 	}
+	tx.Commit()
 
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
