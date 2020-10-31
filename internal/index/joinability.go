@@ -15,6 +15,7 @@ const (
 	maxK = 4
 )
 
+// BuildJoinabilityIndex builds an LSH Ensemble index on the dataset columns.
 func BuildJoinabilityIndex(db *database.DB) (*lshensemble.LshEnsemble, error) {
 	var domainRecords []*lshensemble.DomainRecord
 
