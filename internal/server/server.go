@@ -159,6 +159,10 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	results, err := s.joinableColumns(query)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
 
 	type queryResult struct {
 		DatasetID   string
