@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ekzhu/lshensemble"
+	"opendatalink/internal/vec32"
 )
 
 // DB is a wrapper of the Open Data Link database.
@@ -178,6 +179,22 @@ func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 	}
 
 	return &m, nil
+}
+
+// MetadataVector returns the metadata embedding vector for a dataset.
+func (db *DB) MetadataVector(datasetID string) ([]float32, error) {
+	var emb []byte
+
+	err := db.QueryRow(`
+	SELECT emb FROM metadata_vectors WHERE dataset_id = ?`, datasetID).Scan(&emb)
+	if err != nil {
+		return nil, err
+	}
+	vec, err := vec32.FromBytes(emb)
+	if err != nil {
+		return nil, err
+	}
+	return vec, nil
 }
 
 // MetadataScan extracts a row from rows into a database.Metadata instance

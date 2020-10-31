@@ -10,15 +10,55 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
+	"github.com/ekzhu/go-fasttext"
 	_ "github.com/mattn/go-sqlite3"
 	"opendatalink/internal/config"
+	"opendatalink/internal/vec32"
 )
 
-const (
-	datasetsDir = "datasets"
-)
+const datasetsDir = "datasets"
+
+var wordSepRe = regexp.MustCompile(`\W+`)
+
+// Lucene stop words list.
+var stopwords = map[string]bool{
+	"a":     true,
+	"an":    true,
+	"and":   true,
+	"are":   true,
+	"as":    true,
+	"at":    true,
+	"be":    true,
+	"but":   true,
+	"by":    true,
+	"for":   true,
+	"if":    true,
+	"in":    true,
+	"into":  true,
+	"is":    true,
+	"it":    true,
+	"no":    true,
+	"not":   true,
+	"of":    true,
+	"on":    true,
+	"or":    true,
+	"such":  true,
+	"that":  true,
+	"the":   true,
+	"their": true,
+	"then":  true,
+	"there": true,
+	"these": true,
+	"they":  true,
+	"this":  true,
+	"to":    true,
+	"was":   true,
+	"will":  true,
+	"with":  true,
+}
 
 type metadata struct {
 	Resource *struct {
@@ -65,6 +105,40 @@ func removeDuplicates(s []string) []string {
 	return s[:i]
 }
 
+func metadataVector(ft *fasttext.FastText, m *metadata) ([]float32, error) {
+	vec := make([]float32, fasttext.Dim)
+
+	metadataText := []string{
+		m.Resource.Name,
+		m.Resource.Description,
+		m.Resource.Attribution,
+		strings.Join(m.Classification.Categories, " "),
+		strings.Join(m.Classification.Tags, " "),
+		m.Classification.DomainCategory,
+		strings.Join(m.Classification.DomainTags, " "),
+	}
+	for _, words := range metadataText {
+		for _, word := range wordSepRe.Split(words, -1) {
+			if stopwords[strings.ToLower(word)] {
+				continue
+			}
+			emb, err := ft.GetEmb(word)
+			if err != nil {
+				if err == fasttext.ErrNoEmbFound {
+					continue
+				}
+				return nil, err
+			}
+			vec32.Normalize(emb)
+			vec32.Add(vec, emb)
+		}
+	}
+	vec32.Scale(vec, 1/float32(len(vec)))
+	vec32.Normalize(vec)
+
+	return vec, nil
+}
+
 func main() {
 	db, err := sql.Open("sqlite3", config.DatabasePath())
 	if err != nil {
@@ -72,7 +146,15 @@ func main() {
 	}
 	defer db.Close()
 
-	insertStmt, err := db.Prepare(`
+	ft := fasttext.NewFastText(config.FasttextPath())
+	defer ft.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	metadataStmt, err := tx.Prepare(`
 	INSERT INTO metadata (
 		dataset_id,
 		name,
@@ -89,14 +171,23 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer insertStmt.Close()
+	defer metadataStmt.Close()
+
+	vectorStmt, err := tx.Prepare(`
+	INSERT INTO metadata_vectors (dataset_id, emb) VALUES (?, ?)`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer vectorStmt.Close()
 
 	files, err := ioutil.ReadDir(datasetsDir)
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	for _, f := range files {
-		path := filepath.Join(datasetsDir, f.Name(), "metadata.json")
+		datasetID := f.Name()
+		path := filepath.Join(datasetsDir, datasetID, "metadata.json")
 
 		file, err := os.Open(path)
 		if err != nil {
@@ -104,15 +195,15 @@ func main() {
 				log.Print(err)
 				continue
 			}
-			log.Fatal(err)
+			log.Fatalf("dataset %v: %v", datasetID, err)
 		}
 		var m metadata
 		if err := json.NewDecoder(file).Decode(&m); err != nil {
-			log.Fatal(err)
+			log.Fatalf("dataset %v: %v", datasetID, err)
 		}
 		file.Close()
 
-		_, err = insertStmt.Exec(
+		_, err = metadataStmt.Exec(
 			m.Resource.ID,
 			m.Resource.Name,
 			m.Resource.Description,
@@ -123,7 +214,17 @@ func main() {
 			strings.Join(m.tags(), ","),
 			m.Permalink)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("dataset %v: %v", datasetID, err)
+		}
+
+		emb, err := metadataVector(ft, &m)
+		if err != nil {
+			log.Fatalf("dataset %v: %v", datasetID, err)
+		}
+		_, err = vectorStmt.Exec(m.Resource.ID, vec32.Bytes(emb))
+		if err != nil {
+			log.Fatalf("dataset %v: %v", datasetID, err)
 		}
 	}
+	tx.Commit()
 }
