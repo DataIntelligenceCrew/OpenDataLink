@@ -30,6 +30,8 @@ const (
 	mhSize = 256
 	// Number of sample data values
 	sampleSize = 20
+	// Number of worker goroutines
+	numWorkers = 16
 )
 
 type tableSketch struct {
@@ -161,7 +163,7 @@ func main() {
 	jobs := make(chan string, len(files))
 	out := make(chan *tableSketch, len(files))
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < numWorkers; i++ {
 		go sketchWorker(jobs, out)
 	}
 	for _, f := range files {
