@@ -8,12 +8,12 @@ import (
 	"github.com/ekzhu/lshensemble"
 )
 
-// DB is a wrapper of the opendatalink SQLite3
+// DB is a wrapper of the Open Data Link database.
 type DB struct {
 	*sql.DB
 }
 
-// New returns a handle to the  give a path to its file
+// New open the database.
 func New(databasePath string) (*DB, error) {
 	db, err := sql.Open("sqlite3", databasePath)
 	if err != nil {
@@ -22,7 +22,7 @@ func New(databasePath string) (*DB, error) {
 	return &DB{db}, nil
 }
 
-// ColumnSketch represents a row in the column_sketches table
+// ColumnSketch is a row of the column_sketches table.
 type ColumnSketch struct {
 	ColumnID      string
 	DatasetID     string
@@ -32,7 +32,7 @@ type ColumnSketch struct {
 	Sample        []string
 }
 
-// ColumnSketch returns the ColumnSketch of the given column
+// ColumnSketch returns the ColumnSketch for the given column ID.
 func (db *DB) ColumnSketch(columnID string) (*ColumnSketch, error) {
 	c := ColumnSketch{ColumnID: columnID}
 	var minhash, sample []byte
@@ -55,7 +55,7 @@ func (db *DB) ColumnSketch(columnID string) (*ColumnSketch, error) {
 	return &c, nil
 }
 
-// DatasetColumns returns rows which describe the columns of dataset_id
+// DatasetColumns returns the column sketches for the dataset with the given ID.
 func (db *DB) DatasetColumns(datasetID string) ([]*ColumnSketch, error) {
 	var cols []*ColumnSketch
 
@@ -91,10 +91,9 @@ func (db *DB) DatasetColumns(datasetID string) ([]*ColumnSketch, error) {
 	return cols, nil
 }
 
-// Metadata is a row retrieved form the 'Metadata' table in
-// 'opendatalink.sqlite'
+// Metadata is a row of the metadata table.
 type Metadata struct {
-	DatasetID    string // four-by-four (e.g. "ad4f-f5gs")
+	DatasetID    string
 	Name         string
 	Description  string
 	Attribution  string
@@ -102,10 +101,10 @@ type Metadata struct {
 	UpdatedAt    string
 	Categories   []string
 	Tags         []string
-	Permalink    string // Permanent link to the dataset
+	Permalink    string
 }
 
-// DatasetName returns the name of the dataset given its ID
+// DatasetName returns the name of a dataset given its ID.
 func (db *DB) DatasetName(datasetID string) (string, error) {
 	var name string
 	err := db.QueryRow(`
@@ -141,7 +140,7 @@ func TagsSplit(tags string) []string {
 	return strings.Split(tags, ",")
 }
 
-// Metadata returns a row given the row's primary key, dataset_id
+// Metadata returns the metadata for the dataset with the given ID.
 func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 	m := Metadata{DatasetID: datasetID}
 	var categories, tags string
@@ -177,33 +176,6 @@ func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 	}
 
 	return &m, nil
-}
-
-// MetadataRows retreives all data in the Metadata table.
-func (db *DB) MetadataRows() (*[]Metadata, error) {
-	rows, err := db.Query("SELECT * from metadata;")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var metadataRows []Metadata
-	metadataIterator, err := db.NewMetadataIterator()
-	if err != nil {
-		return nil, err
-	}
-	for metadataIterator.HasNext() {
-		metadata, err := metadataIterator.Row()
-		if err != nil {
-			return nil, err
-		}
-		metadataRows = append(metadataRows, *metadata)
-	}
-	if err := metadataIterator.End(); err != nil {
-		return nil, nil
-	}
-
-	return &metadataRows, nil
 }
 
 // MetadataScan extracts a row from rows into a database.Metadata instance
