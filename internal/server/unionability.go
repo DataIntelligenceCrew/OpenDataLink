@@ -49,6 +49,9 @@ func (s *Server) unionCandidates(table []*database.ColumnSketch) ([]string, erro
 	addedCols := make(map[string]bool)
 
 	for _, c := range table {
+		if c.DistinctCount == 0 {
+			continue
+		}
 		done := make(chan struct{})
 		results := s.joinabilityIndex.Query(c.Minhash, c.DistinctCount, 0.5, done)
 
