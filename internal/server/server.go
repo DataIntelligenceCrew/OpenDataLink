@@ -1,3 +1,5 @@
+// Package server defines the Server type, which can be installed to serve the
+// Open Data Link frontend.
 package server
 
 import (

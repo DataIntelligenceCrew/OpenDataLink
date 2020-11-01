@@ -1,3 +1,4 @@
+// Command build_fasttext build a fastText SQLite database.
 package main
 
 import (

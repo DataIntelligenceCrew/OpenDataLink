@@ -1,3 +1,4 @@
+// Command server serves the Open Data Link frontend.
 package main
 
 import (

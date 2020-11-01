@@ -1,3 +1,5 @@
+// Package database provides a wrapper of sql.DB for working with the Open Data
+// Link database.
 package database
 
 import (
