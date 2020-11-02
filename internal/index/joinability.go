@@ -1,8 +1,8 @@
 package index
 
 import (
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/ekzhu/lshensemble"
-	"opendatalink/internal/database"
 )
 
 const (

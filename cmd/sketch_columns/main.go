@@ -17,10 +17,10 @@ import (
 	"runtime"
 	"runtime/pprof"
 
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/config"
 	"github.com/axiomhq/hyperloglog"
 	"github.com/ekzhu/lshensemble"
 	_ "github.com/mattn/go-sqlite3"
-	"opendatalink/internal/config"
 )
 
 const (

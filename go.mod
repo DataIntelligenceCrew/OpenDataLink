@@ -1,4 +1,4 @@
-module opendatalink
+module github.com/DataIntelligenceCrew/OpenDataLink
 
 go 1.14
 

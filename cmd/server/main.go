@@ -5,11 +5,11 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/config"
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/index"
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/server"
 	_ "github.com/mattn/go-sqlite3"
-	"opendatalink/internal/config"
-	"opendatalink/internal/database"
-	"opendatalink/internal/index"
-	"opendatalink/internal/server"
 )
 
 const (

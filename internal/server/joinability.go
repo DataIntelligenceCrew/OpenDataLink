@@ -3,8 +3,8 @@ package server
 import (
 	"sort"
 
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/ekzhu/lshensemble"
-	"opendatalink/internal/database"
 )
 
 type joinabilityResult struct {

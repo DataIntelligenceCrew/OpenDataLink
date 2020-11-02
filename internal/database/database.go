@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
 	"github.com/ekzhu/lshensemble"
-	"opendatalink/internal/vec32"
 )
 
 // DB is a wrapper of the Open Data Link database.

@@ -13,10 +13,10 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/config"
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
 	"github.com/ekzhu/go-fasttext"
 	_ "github.com/mattn/go-sqlite3"
-	"opendatalink/internal/config"
-	"opendatalink/internal/vec32"
 )
 
 const datasetsDir = "datasets"

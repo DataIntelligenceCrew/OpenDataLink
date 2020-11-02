@@ -11,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/ekzhu/lshensemble"
-	"opendatalink/internal/database"
 )
 
 // Server can be installed to serve the Open Data Link frontend.
