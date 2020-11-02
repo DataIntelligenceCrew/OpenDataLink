@@ -3,3 +3,8 @@
 
 opendatalink.sqlite
 fasttext.sqlite
+
+/build_fasttext
+/process_metadata
+/server
+/sketch_columns
