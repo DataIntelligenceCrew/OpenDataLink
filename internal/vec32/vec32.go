@@ -7,32 +7,49 @@ import (
 	"math"
 )
 
-// Add adds v2 to v1.
-func Add(v1, v2 []float32) {
-	for i, v := range v2 {
-		v1[i] += v
+// Add adds b to a.
+// Add panics if the vector lengths are unequal.
+func Add(a, b []float32) {
+	if len(a) != len(b) {
+		panic("vector lengths not equal")
+	}
+	for i, v := range b {
+		a[i] += v
 	}
 }
 
-// Scale scales vec by n.
-func Scale(vec []float32, n float32) {
-	for i := range vec {
-		vec[i] *= n
+// Scale scales a by n.
+func Scale(a []float32, n float32) {
+	for i := range a {
+		a[i] *= n
 	}
 }
 
-// Norm returns the Euclidean norm of vec.
-func Norm(vec []float32) float32 {
+// Dot returns the dot product of a and b.
+// Dot panics if the vector lengths are unequal.
+func Dot(a, b []float32) float32 {
+	if len(a) != len(b) {
+		panic("vector lengths not equal")
+	}
 	s := float32(0)
-	for _, v := range vec {
+	for i := range a {
+		s += a[i] * b[i]
+	}
+	return s
+}
+
+// Norm returns the Euclidean norm of a.
+func Norm(a []float32) float32 {
+	s := float32(0)
+	for _, v := range a {
 		s += v * v
 	}
 	return float32(math.Sqrt(float64(s)))
 }
 
-// Normalize converts vec to its unit vector.
-func Normalize(vec []float32) {
-	Scale(vec, 1/Norm(vec))
+// Normalize converts a to its unit vector.
+func Normalize(a []float32) {
+	Scale(a, 1/Norm(a))
 }
 
 // Bytes serializes vec into a byte slice.
