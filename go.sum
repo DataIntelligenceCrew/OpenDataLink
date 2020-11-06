@@ -2,6 +2,8 @@ github.com/DataIntelligenceCrew/go-faiss v0.0.0-20201025214133-7ad91cff262b h1:F
 github.com/DataIntelligenceCrew/go-faiss v0.0.0-20201025214133-7ad91cff262b/go.mod h1:4Gi7G3PF78IwZigTL2M1AJXOaAgxyL66vCqUYVaNgwk=
 github.com/DataIntelligenceCrew/go-faiss v0.0.0-20201101230707-371e62ef217c h1:ridFphoeL9J/naJtTRKxobN7Bk6wqRlNy4pIFuHILm0=
 github.com/DataIntelligenceCrew/go-faiss v0.0.0-20201101230707-371e62ef217c/go.mod h1:4Gi7G3PF78IwZigTL2M1AJXOaAgxyL66vCqUYVaNgwk=
+github.com/DataIntelligenceCrew/go-faiss v0.0.0-20201106160620-9b65e3ec446a h1:4hccsm+UcmoNDznp6C6NnFGn1MsJ6LD2w59ao6bupa8=
+github.com/DataIntelligenceCrew/go-faiss v0.0.0-20201106160620-9b65e3ec446a/go.mod h1:4Gi7G3PF78IwZigTL2M1AJXOaAgxyL66vCqUYVaNgwk=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/PuerkitoBio/goquery v1.5.1/go.mod h1:GsLWisAFVj4WgDibEWF4pvYnkVQBpKBKeU+7zCJoLcc=
 github.com/ajstarks/svgo v0.0.0-20180226025133-644b8db467af/go.mod h1:K08gAheRH3/J6wwsYMMT4xOr94bZjxIelGM0+d/wbFw=

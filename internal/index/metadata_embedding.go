@@ -8,7 +8,7 @@ import (
 
 // MetadataIndex is an index over the metadata embedding vectors.
 type MetadataIndex struct {
-	idx *faiss.IndexFlatIP
+	idx *faiss.IndexFlat
 	// Maps ID of vector in index to datasetID.
 	idMap []string
 }
@@ -27,7 +27,7 @@ func BuildMetadataEmbeddingIndex(db *database.DB) (*MetadataIndex, error) {
 	defer rows.Close()
 
 	var idMap []string
-	var vecs [][]float32
+	var vecs []float32
 
 	for rows.Next() {
 		var datasetID string
@@ -41,7 +41,7 @@ func BuildMetadataEmbeddingIndex(db *database.DB) (*MetadataIndex, error) {
 			return nil, err
 		}
 		idMap = append(idMap, datasetID)
-		vecs = append(vecs, vec)
+		vecs = append(vecs, vec...)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -62,17 +62,17 @@ func (idx *MetadataIndex) Delete() {
 // Returns the dataset IDs of the k nearest neighbors and the corresponding
 // cosine similarity, sorted by similarity.
 func (idx *MetadataIndex) Query(vec []float32, k int) ([]string, []float32, error) {
-	dist, ids, err := idx.idx.Search([][]float32{vec}, k)
+	dist, ids, err := idx.idx.Search(vec, k)
 	if err != nil {
 		return nil, nil, err
 	}
-	datasets := make([]string, 0, len(ids[0]))
+	datasets := make([]string, 0, k)
 
-	for _, id := range ids[0] {
+	for _, id := range ids {
 		if id == -1 {
 			break
 		}
 		datasets = append(datasets, idx.idMap[id])
 	}
-	return datasets, dist[0][:len(datasets)], nil
+	return datasets, dist[:len(datasets)], nil
 }

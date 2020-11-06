@@ -65,12 +65,10 @@ func Bytes(vec []float32) []byte {
 func FromBytes(data []byte) ([]float32, error) {
 	vec := make([]float32, len(data)/4)
 	buf := bytes.NewReader(data)
-	var v float32
 	for i := range vec {
-		if err := binary.Read(buf, binary.BigEndian, &v); err != nil {
+		if err := binary.Read(buf, binary.BigEndian, &vec[i]); err != nil {
 			return nil, err
 		}
-		vec[i] = v
 	}
 	return vec, nil
 }
