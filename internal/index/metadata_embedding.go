@@ -9,7 +9,7 @@ import (
 // MetadataIndex is an index over the metadata embedding vectors.
 type MetadataIndex struct {
 	idx *faiss.IndexFlat
-	// Maps ID of vector in index to datasetID.
+	// Maps ID of vector in index to dataset ID.
 	idMap []string
 }
 
