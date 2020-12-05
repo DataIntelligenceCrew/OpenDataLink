@@ -32,18 +32,20 @@
   <h3>Data Preview</h3>
   <p>Click a column to find tables joinable on that column.</p>
 
-  <table>
-    <tr>
-      {{range .Columns}}
-        <th><a href="/joinable-columns?id={{.ColumnID}}">{{.ColumnName}}</a></th>
-      {{end}}
-    </tr>
-    {{range $row, $v := (index .Columns 0).Sample}}
+  {{with .Columns}}
+    <table>
       <tr>
-        {{range $.Columns}}
-          <td>{{index .Sample $row}}</td>
+        {{range .}}
+          <th><a href="/joinable-columns?id={{.ColumnID}}">{{.ColumnName}}</a></th>
         {{end}}
       </tr>
-    {{end}}
-  </table>
+      {{range $row, $_ := (index . 0).Sample}}
+        <tr>
+          {{range $.Columns}}
+            <td>{{index .Sample $row}}</td>
+          {{end}}
+        </tr>
+      {{end}}
+    </table>
+  {{end}}
 {{end}}
