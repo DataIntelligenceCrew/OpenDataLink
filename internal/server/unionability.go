@@ -1,11 +1,14 @@
 package server
 
 import (
+	"errors"
 	"sort"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/ekzhu/lshensemble"
 )
+
+var errInvalidID = errors.New("unionableTables: invalid dataset ID")
 
 type unionabilityResult struct {
 	datasetID string
@@ -16,6 +19,8 @@ func (s *Server) unionableTables(datasetID string) ([]*unionabilityResult, error
 	query, err := s.db.DatasetColumns(datasetID)
 	if err != nil {
 		return nil, err
+	} else if len(query) == 0 {
+		return nil, errInvalidID
 	}
 	candidates, err := s.unionCandidates(query)
 	if err != nil {

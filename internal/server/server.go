@@ -215,7 +215,11 @@ func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request)
 
 	results, err := s.unionableTables(queryID)
 	if err != nil {
-		serverError(w, err)
+		if err == errInvalidID {
+			http.NotFound(w, req)
+		} else {
+			serverError(w, err)
+		}
 		return
 	}
 	type queryResult struct {
