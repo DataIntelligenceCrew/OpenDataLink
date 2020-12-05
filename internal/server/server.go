@@ -165,32 +165,7 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 		serverError(w, err)
 		return
 	}
-
-	type queryResult struct {
-		DatasetID   string
-		DatasetName string
-		ColumnID    string
-		ColumnName  string
-		Containment float64
-	}
-	var resultData []*queryResult
-
-	for _, res := range results {
-		datasetName, err := s.db.DatasetName(res.DatasetID)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		resultData = append(resultData, &queryResult{
-			res.DatasetID,
-			datasetName,
-			res.ColumnID,
-			res.ColumnName,
-			res.containment,
-		})
-	}
-
-	qDatasetName, err := s.db.DatasetName(query.DatasetID)
+	datasetName, err := s.db.DatasetName(query.DatasetID)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -200,13 +175,13 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 		DatasetID   string
 		DatasetName string
 		ColumnName  string
-		Results     []*queryResult
+		Results     []*joinabilityResult
 	}{
-		"Joinable tables for " + qDatasetName + " - Open Data Link",
+		"Joinable tables for " + datasetName + " - Open Data Link",
 		query.DatasetID,
-		qDatasetName,
+		datasetName,
 		query.ColumnName,
-		resultData,
+		results,
 	})
 }
 
@@ -222,27 +197,7 @@ func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request)
 		}
 		return
 	}
-	type queryResult struct {
-		DatasetID   string
-		DatasetName string
-		Alignment   float64
-	}
-	var resultData []*queryResult
-
-	for _, res := range results {
-		datasetName, err := s.db.DatasetName(res.datasetID)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		resultData = append(resultData, &queryResult{
-			res.datasetID,
-			datasetName,
-			res.alignment,
-		})
-	}
-
-	queryName, err := s.db.DatasetName(queryID)
+	datasetName, err := s.db.DatasetName(queryID)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -251,12 +206,12 @@ func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request)
 		PageTitle   string
 		DatasetID   string
 		DatasetName string
-		Results     []*queryResult
+		Results     []*unionabilityResult
 	}{
-		"Unionable tables for " + queryName + " - Open Data Link",
+		"Unionable tables for " + datasetName + " - Open Data Link",
 		queryID,
-		queryName,
-		resultData,
+		datasetName,
+		results,
 	})
 }
 

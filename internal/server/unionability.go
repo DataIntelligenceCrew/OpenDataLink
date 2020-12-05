@@ -11,8 +11,9 @@ import (
 var errInvalidID = errors.New("unionableTables: invalid dataset ID")
 
 type unionabilityResult struct {
-	datasetID string
-	alignment float64
+	DatasetID   string
+	DatasetName string
+	Alignment   float64
 }
 
 func (s *Server) unionableTables(datasetID string) ([]*unionabilityResult, error) {
@@ -33,13 +34,17 @@ func (s *Server) unionableTables(datasetID string) ([]*unionabilityResult, error
 		if err != nil {
 			return nil, err
 		}
+		datasetName, err := s.db.DatasetName(datasetID)
+		if err != nil {
+			return nil, err
+		}
 		alignment := unionabilityScore(query, candidate)
 		results = append(results, &unionabilityResult{
 			datasetID, datasetName, alignment,
 		})
 	}
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].alignment > results[j].alignment
+		return results[i].Alignment > results[j].Alignment
 	})
 
 	return results, nil

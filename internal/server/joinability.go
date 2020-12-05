@@ -9,7 +9,8 @@ import (
 
 type joinabilityResult struct {
 	*database.ColumnSketch
-	containment float64
+	DatasetName string
+	Containment float64
 }
 
 func (s *Server) joinableColumns(query *database.ColumnSketch) ([]*joinabilityResult, error) {
@@ -34,10 +35,14 @@ func (s *Server) joinableColumns(query *database.ColumnSketch) ([]*joinabilityRe
 		if containment < s.joinabilityThreshold {
 			continue
 		}
-		results = append(results, &joinabilityResult{res, containment})
+		datasetName, err := s.db.DatasetName(res.DatasetID)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, &joinabilityResult{res, datasetName, containment})
 	}
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].containment > results[j].containment
+		return results[i].Containment > results[j].Containment
 	})
 
 	return results, nil
