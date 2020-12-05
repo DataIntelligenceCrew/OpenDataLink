@@ -28,7 +28,6 @@ func newDatasetNode(id int64, vector []float32, datasetID string) *node {
 	}
 }
 
-// newMergedNode creates a new merged node from two nodes.
 func newMergedNode(id int64, a, b *node) *node {
 	vec := make([]float32, embeddingDim)
 	vec32.Add(vec, a.vector)
@@ -81,14 +80,11 @@ func (g *tableGraph) addDatasetNodes(db *database.DB) error {
 			return err
 		}
 		id := g.NewNode().ID()
-		node := newDatasetNode(id, vec, datasetID)
-		g.AddNode(node)
+		g.AddNode(newDatasetNode(id, vec, datasetID))
 	}
 	return rows.Err()
 }
 
-// addMergedNode creates a new merged node from a and b and adds it to the graph
-// with edges to a and b.
 func (g *tableGraph) addMergedNode(a, b *node) *node {
 	id := g.NewNode().ID()
 	node := newMergedNode(id, a, b)
@@ -125,9 +121,7 @@ func buildIndex(g *tableGraph) (*index, error) {
 	if err != nil {
 		return nil, err
 	}
-	vecs, ids := g.vectors()
-
-	if err := idx.AddWithIDs(vecs, ids); err != nil {
+	if err := idx.AddWithIDs(g.vectors()); err != nil {
 		return nil, err
 	}
 	return &index{idx, g}, nil
@@ -145,7 +139,7 @@ func (idx *index) add(n *node) error {
 func (idx *index) remove(nodes ...*node) error {
 	var ids []int64
 	for _, node := range nodes {
-		ids = append(ids, node.ID())
+		ids = append(ids, node.id)
 	}
 	sel, err := faiss.NewIDSelectorBatch(ids)
 	if err != nil {
@@ -160,32 +154,18 @@ func (idx *index) remove(nodes ...*node) error {
 }
 
 // query returns a nodePair containing the given node and its nearest neighbor.
+//
+// The neighbor will not be the query itself if the query is in the index.
+// Node: this function may panic if there is only one node in the index.
 func (idx *index) query(n *node) (*nodePair, error) {
-	cos, ids, err := idx.idx.Search(n.vector, 1)
-	if err != nil {
-		return nil, err
-	}
-	res := idx.g.Node(ids[0]).(*node)
-
-	return &nodePair{n, res, cos[0]}, nil
-}
-
-// query_indexed is like query, but if the query node is in the index, the
-// result will not be the query itself.
-func (idx *index) query_indexed(n *node) (*nodePair, error) {
 	cos, ids, err := idx.idx.Search(n.vector, 2)
 	if err != nil {
 		return nil, err
 	}
-	// Usually the first result will be the query itself, but the query could be
-	// the second result if two datasets have the same embedding vectors.
-	// In this case, use the first result.
-	id, sim := ids[1], cos[1]
+	id, sim := ids[0], cos[0]
 	if id == n.id {
-		id = ids[0]
-		sim = cos[0]
+		id, sim = ids[1], cos[1]
 	}
-	// The next line panics if id is -1 (no result).
 	res := idx.g.Node(id).(*node)
 
 	return &nodePair{n, res, sim}, nil
@@ -200,14 +180,13 @@ func (idx *index) allPairs() ([]*nodePair, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	results := make([]*nodePair, len(qids))
+
 	for i, qid := range qids {
 		a := idx.g.Node(qid).(*node)
 		id, sim := ids[i*2+1], cos[i*2+1]
 		if id == a.id {
-			id = ids[i*2]
-			sim = cos[i*2]
+			id, sim = ids[i*2], cos[i*2]
 		}
 		b := idx.g.Node(id).(*node)
 
@@ -221,6 +200,7 @@ func (idx *index) delete() {
 }
 
 // priorityQueue is used to get the closest pair of nodes.
+// It implements the container/heap interface.
 type priorityQueue []*nodePair
 
 func (pq priorityQueue) Len() int           { return len(pq) }
@@ -242,73 +222,72 @@ func (pq *priorityQueue) Pop() interface{} {
 
 // buildInitialOrg builds the initial organization of the navigation graph.
 //
-// 1. Create nodes for all datasets and add them to graph.
-// 2. Create index over the nodes.
-// 3. Query index with all nodes, add (query, NN) pairs to priority queue.
-// 4a. Pop closest pair of nodes off PQ and remove the nodes from index.
-// 4b. Created merged node from closest pair and add it to graph with edges to
-//     the pair of nodes.
-// 4c. Add the merged node to the index and PQ.
-// 4d. Repeat until index is empty.
+// The initial organization is a binary tree created by joining the most similar
+// pairs of nodes under a parent node.
 func buildInitialOrg(db *database.DB) (*tableGraph, error) {
+	// Create nodes for all datasets and add them to graph.
 	g := newGraph()
 	if err := g.addDatasetNodes(db); err != nil {
 		return nil, err
 	}
+	// Create index over the nodes.
 	index, err := buildIndex(g)
 	if err != nil {
 		return nil, err
 	}
 	defer index.delete()
 
+	// Query index with all nodes, add (query, NN) pairs to priority queue.
 	var pq priorityQueue
 	pq, err = index.allPairs()
 	if err != nil {
 		return nil, err
 	}
+	heap.Init(&pq)
+
+	// Set of nodes that have been added to the initial organization.
+	addedIDs := make(map[int64]bool)
 
 	for {
-		heap.Init(&pq)
+		// Pop closest pair of nodes off PQ.
 		pair := heap.Pop(&pq).(*nodePair)
 
+		// Skip pair if a is already part of the tree.
+		if addedIDs[pair.a.id] == true {
+			continue
+		}
+		// Update pair if b is part of the tree.
+		if addedIDs[pair.b.id] == true {
+			p, err := index.query(pair.a)
+			if err != nil {
+				return nil, err
+			}
+			heap.Push(&pq, p)
+			continue
+		}
+		// Remove the pair of nodes from index.
 		if err := index.remove(pair.a, pair.b); err != nil {
 			return nil, err
 		}
+		// Create merged node from closest pair and add it to graph with edges
+		// to the pair of nodes.
 		node := g.addMergedNode(pair.a, pair.b)
+		addedIDs[pair.a.id] = true
+		addedIDs[pair.b.id] = true
 
 		if index.ntotal() == 0 {
 			g.root = node
 			break
 		}
-
+		// Add the merged node to the PQ and index.
 		p, err := index.query(node)
 		if err != nil {
 			return nil, err
 		}
-		pq = append(pq, p)
+		heap.Push(&pq, p)
 
 		if err := index.add(node); err != nil {
 			return nil, err
-		}
-
-		// Update PQ
-		for i := 0; i < len(pq); i++ {
-			p := pq[i]
-			// Remove pairs where a is in removed pair.
-			// Update pairs where b is in removed pair.
-			if p.a == pair.a || p.a == pair.b {
-				n := len(pq)
-				pq[i] = pq[n-1]
-				pq[n-1] = nil
-				pq = pq[:n-1]
-				i--
-			} else if p.b == pair.a || p.b == pair.b {
-				np, err := index.query_indexed(p.a)
-				if err != nil {
-					return nil, err
-				}
-				pq[i] = np
-			}
 		}
 	}
 	return g, nil
