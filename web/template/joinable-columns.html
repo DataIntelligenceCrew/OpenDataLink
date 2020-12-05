@@ -4,12 +4,16 @@
   </h2>
 
   <h3>Showing joinable tables on <i>{{.ColumnName}}</i></h3>
-  {{range .Results}}
-    <p>
-    <a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a> &gt;
-    <a href="/joinable-columns?id={{.ColumnID}}">{{.ColumnName}}</a>
-    (containment: {{printf "%.2f" .Containment}})
-    </p>
+  {{with .Results}}
+    <p>{{len .}} results</p>
+
+    {{range .}}
+      <p>
+      <a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a> &gt;
+      <a href="/joinable-columns?id={{.ColumnID}}">{{.ColumnName}}</a>
+      (containment: {{printf "%.2f" .Containment}})
+      </p>
+    {{end}}
   {{else}}
     <p>No joinable tables.</p>
   {{end}}

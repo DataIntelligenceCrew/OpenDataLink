@@ -1,13 +1,18 @@
 {{define "content"}}
   <h2>Results for "{{.Query}}"</h2>
-  <p>{{len .Results}} results</p>
 
-  {{range .Results}}
-    <div class="search-snippet">
-      <h3><a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a></h3>
-      <p>{{.Description}}</p>
-      <p><strong>Tags:</strong> {{.Tags}}</p>
-    </div>
+  {{with .Results}}
+    <p>{{len .}} results</p>
+
+    {{range .}}
+      <div class="search-snippet">
+        <h3><a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a></h3>
+        <p>{{.Description}}</p>
+        <p><strong>Tags:</strong> {{.Tags}}</p>
+      </div>
+    {{end}}
+  {{else}}
+    <p>No results.</p>
   {{end}}
 {{end}}
 

@@ -3,11 +3,15 @@
     Unionable tables for <a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a>
   </h2>
 
-  {{range .Results}}
-    <p>
-    <a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a>
-    (alignment: {{printf "%.2f" .Alignment}})
-    </p>
+  {{with .Results}}
+    <p>{{len .}} results</p>
+
+    {{range .}}
+      <p>
+      <a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a>
+      (alignment: {{printf "%.2f" .Alignment}})
+      </p>
+    {{end}}
   {{else}}
     <p>No unionable tables.</p>
   {{end}}
