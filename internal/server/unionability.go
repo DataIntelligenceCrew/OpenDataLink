@@ -29,14 +29,14 @@ func (s *Server) unionableTables(datasetID string) ([]*unionabilityResult, error
 			return nil, err
 		}
 		alignment := unionabilityScore(query, candidate)
-		// Keep results sorted in descending order by alignment.
-		i := sort.Search(len(results), func(i int) bool {
-			return results[i].alignment <= alignment
+		results = append(results, &unionabilityResult{
+			datasetID, datasetName, alignment,
 		})
-		results = append(results, nil)
-		copy(results[i+1:], results[i:])
-		results[i] = &unionabilityResult{datasetID, alignment}
 	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].alignment > results[j].alignment
+	})
+
 	return results, nil
 }
 

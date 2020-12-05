@@ -34,13 +34,11 @@ func (s *Server) joinableColumns(query *database.ColumnSketch) ([]*joinabilityRe
 		if containment < s.joinabilityThreshold {
 			continue
 		}
-		// Keep results sorted in descending order by containment.
-		i := sort.Search(len(results), func(i int) bool {
-			return results[i].containment <= containment
-		})
-		results = append(results, nil)
-		copy(results[i+1:], results[i:])
-		results[i] = &joinabilityResult{res, containment}
+		results = append(results, &joinabilityResult{res, containment})
 	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].containment > results[j].containment
+	})
+
 	return results, nil
 }
