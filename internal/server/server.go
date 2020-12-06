@@ -104,50 +104,15 @@ func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {
 func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 	query := req.FormValue("q")
 
-	type searchResult struct {
-		DatasetID   string
-		DatasetName string
-		Description string
-		Tags        string
-	}
-	var results []*searchResult
-
-	rows, err := s.db.Query(`
-	SELECT dataset_id, name, description, tags
-	FROM metadata
-	WHERE name || description LIKE ?`, "%"+query+"%")
+	results, err := s.keywordSearch(query)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var res searchResult
-		var description, tags string
-		err = rows.Scan(&res.DatasetID, &res.DatasetName, &description, &tags)
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		if len(description) <= 200 {
-			res.Description = description
-		} else {
-			res.Description = description[:197] + "..."
-		}
-		res.Tags = strings.Join(strings.Split(tags, ","), ", ")
-
-		results = append(results, &res)
-	}
-	if err := rows.Err(); err != nil {
-		serverError(w, err)
-		return
-	}
-
 	s.servePage(w, "search", &struct {
 		PageTitle string
 		Query     string
-		Results   []*searchResult
+		Results   []*database.Metadata
 	}{
 		query + " - Open Data Link",
 		query,

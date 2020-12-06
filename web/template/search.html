@@ -6,9 +6,9 @@
 
     {{range .}}
       <div class="search-snippet">
-        <h3><a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a></h3>
-        <p>{{.Description}}</p>
-        <p><strong>Tags:</strong> {{.Tags}}</p>
+        <h3><a href="/dataset/{{.DatasetID}}">{{.Name}}</a></h3>
+        <p>{{shorten .Description}}</p>
+        <p><strong>Tags:</strong> {{commaseparate .Tags}}</p>
       </div>
     {{end}}
   {{else}}
