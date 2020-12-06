@@ -1,0 +1,15 @@
+{{define "content"}}
+  <h2>
+    Similar datasets for <a href="/dataset/{{.DatasetID}}">{{.DatasetName}}</a>
+  </h2>
+
+  {{range .Results}}
+    <div class="search-snippet">
+      <h3><a href="/dataset/{{.DatasetID}}">{{.Name}}</a></h3>
+      <p>{{shorten .Description}}</p>
+      <p><strong>Tags:</strong> {{commaseparate .Tags}}</p>
+    </div>
+  {{else}}
+    <p>No results.</p>
+  {{end}}
+{{end}}

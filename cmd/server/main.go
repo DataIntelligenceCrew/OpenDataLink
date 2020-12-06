@@ -24,6 +24,12 @@ func main() {
 	}
 	defer db.Close()
 
+	metadataIndex, err := index.BuildMetadataEmbeddingIndex(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("built metadata embedding index")
+
 	joinabilityIndex, err := index.BuildJoinabilityIndex(db)
 	if err != nil {
 		log.Fatal(err)
@@ -33,6 +39,7 @@ func main() {
 	s, err := server.New(&server.Config{
 		DevMode:              true,
 		DB:                   db,
+		MetadataIndex:        metadataIndex,
 		JoinabilityThreshold: joinabilityThreshold,
 		JoinabilityIndex:     joinabilityIndex,
 	})

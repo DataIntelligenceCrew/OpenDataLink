@@ -59,8 +59,9 @@ func (idx *MetadataIndex) Delete() {
 }
 
 // Query queries the index with vec.
-// Returns the dataset IDs of the k nearest neighbors and the corresponding
-// cosine similarity, sorted by similarity.
+//
+// Returns the dataset IDs of the (up to) k nearest neighbors and the
+// corresponding cosine similarity, sorted by similarity.
 func (idx *MetadataIndex) Query(vec []float32, k int64) ([]string, []float32, error) {
 	dist, ids, err := idx.idx.Search(vec, k)
 	if err != nil {
