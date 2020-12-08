@@ -2,6 +2,7 @@ package navigation
 
 import (
 	"container/heap"
+	"math"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
@@ -291,4 +292,63 @@ func buildInitialOrg(db *database.DB) (*tableGraph, error) {
 		}
 	}
 	return g, nil
+}
+
+func toDSNode(s graph.Node) *node {
+	original, ok := s.(*node)
+	if ok {
+		return original
+	}
+		print("Cast Failed")
+		return nil
+	}
+
+// gamma Model Hyperparameter, strictly positive
+const gamma float64 = 1
+
+// $\kappa$ from the paper. Simply the Cosine Similarity
+func similarity(a []float32, b []float32) float32 { // TODO: Is something like this already in FAISS?
+	aDotB := vec32.Dot(a, b)
+	normAB := vec32.Norm(a) * vec32.Norm(b)
+
+	return (aDotB / normAB)
+}
+
+// Equation (4) From the paper
+// TODO: Investigate a better way to do this perhaps using paths API
+func (O *tableGraph) getStateQueryProbability(s graph.Node, X []float32) float64 {
+	parents := O.getParents(s)
+	var out float64 = 0
+
+	for parents.Next() {
+		var p = parents.Node()
+		var stateTransProb = O.getStateTransitionProbability(s, p, X)
+		var parQueryProb float64
+
+		if p != O.root {
+			parQueryProb = O.getStateQueryProbability(p, X)
+		} else {
+			parQueryProb = 1
+		}
+
+		out += stateTransProb * parQueryProb
+	}
+
+	return out
+}
+
+// Equation (1) From the paper
+func (O *tableGraph) getStateTransitionProbability(c graph.Node, s graph.Node, X []float32) float64 {
+	nc := c.(*node)
+	ns := s.(*node)
+	eGammaChildrenS := math.Exp(gamma / float64(O.getChildren(s).Len()))
+	var divisor float64 = 0
+	children := O.getChildren(s)
+	for children.Next() {
+		var curr = children.Node().(*node)
+		var sim = similarity(curr.vector, X)
+		divisor += math.Pow(eGammaChildrenS, float64(sim))
+}
+
+	return math.Pow(eGammaChildrenS, float64(similarity(nc.vector, ns.vector))) / divisor
 }
