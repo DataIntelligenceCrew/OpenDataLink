@@ -55,7 +55,7 @@ func newGraph() *tableGraph {
 }
 
 // addDatasetNodes creates nodes for the datasets and adds them to the graph.
-func (g *tableGraph) addDatasetNodes(db *database.DB) error {
+func (O *tableGraph) addDatasetNodes(db *database.DB) error {
 	rows, err := db.Query(`
 	SELECT dataset_id, emb
 	FROM metadata_vectors
@@ -80,24 +80,25 @@ func (g *tableGraph) addDatasetNodes(db *database.DB) error {
 		if err != nil {
 			return err
 		}
-		id := g.NewNode().ID()
-		g.AddNode(newDatasetNode(id, vec, datasetID))
+		id := O.NewNode().ID()
+		var n = newDatasetNode(id, vec, datasetID)
+		O.AddNode(n)
 	}
 	return rows.Err()
 }
 
-func (g *tableGraph) addMergedNode(a, b *node) *node {
-	id := g.NewNode().ID()
+func (O *tableGraph) addMergedNode(a, b *node) *node {
+	id := O.NewNode().ID()
 	node := newMergedNode(id, a, b)
-	g.AddNode(node)
-	g.SetEdge(g.NewEdge(node, a))
-	g.SetEdge(g.NewEdge(node, b))
+	O.AddNode(node)
+	O.SetEdge(O.NewEdge(node, a))
+	O.SetEdge(O.NewEdge(node, b))
 	return node
 }
 
 // vectors returns the vectors of the nodes in g and the corresponding IDs.
-func (g *tableGraph) vectors() (vectors []float32, ids []int64) {
-	for it := g.Nodes(); it.Next(); {
+func (O *tableGraph) vectors() (vectors []float32, ids []int64) {
+	for it := O.Nodes(); it.Next(); {
 		node := it.Node().(*node)
 		vectors = append(vectors, node.vector...)
 		ids = append(ids, node.id)
