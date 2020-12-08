@@ -8,6 +8,7 @@ import (
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
 	"github.com/DataIntelligenceCrew/go-faiss"
 	"gonum.org/v1/gonum/graph"
+	"gonum.org/v1/gonum/graph/path"
 	"gonum.org/v1/gonum/graph/simple"
 )
 
@@ -47,11 +48,13 @@ func newMergedNode(id int64, a, b *node) *node {
 
 type tableGraph struct {
 	*simple.DirectedGraph
-	root graph.Node
+	root      graph.Node
+	rootPaths path.Shortest
+	leafNodes []*node
 }
 
 func newGraph() *tableGraph {
-	return &tableGraph{simple.NewDirectedGraph(), nil}
+	return &tableGraph{simple.NewDirectedGraph(), nil, path.Shortest{}, make([]*node, 0)}
 }
 
 // addDatasetNodes creates nodes for the datasets and adds them to the graph.
@@ -83,6 +86,7 @@ func (O *tableGraph) addDatasetNodes(db *database.DB) error {
 		id := O.NewNode().ID()
 		var n = newDatasetNode(id, vec, datasetID)
 		O.AddNode(n)
+		O.leafNodes = append(O.leafNodes, n)
 	}
 	return rows.Err()
 }
@@ -292,6 +296,7 @@ func buildInitialOrg(db *database.DB) (*tableGraph, error) {
 			return nil, err
 		}
 	}
+	g.rootPaths = path.DijkstraFrom(g.root, g.DirectedGraph)
 	return g, nil
 }
 
@@ -313,6 +318,44 @@ func similarity(a []float32, b []float32) float32 { // TODO: Is something like t
 	normAB := vec32.Norm(a) * vec32.Norm(b)
 
 	return (aDotB / normAB)
+}
+
+func (O *tableGraph) regenLevels() {
+	O.rootPaths = path.DijkstraFrom(O.root, O.DirectedGraph)
+}
+
+func (O *tableGraph) getLevel(s graph.Node) float64 {
+	_, weight := O.rootPaths.To(s.ID())
+	return weight
+
+}
+
+func (O *tableGraph) getChildren(s graph.Node) graph.Nodes {
+	return O.From(s.ID())
+}
+
+func (O *tableGraph) getParents(s graph.Node) graph.Nodes {
+	return O.To(s.ID())
+}
+
+// Equation (6) from the paper
+// Note that this is not quite the same, since we eliminate equation 5 since vectors are computed at the table level
+func (O *tableGraph) getOrganizationEffectiveness() float64 {
+	var out float64 = 0
+	for _, j := range O.leafNodes {
+		var prob = O.getStateQueryProbability(j, j.vector)
+		out += prob
+	}
+	return out / float64(len(O.leafNodes))
+}
+
+// Equation (10) from the paper
+func (O *tableGraph) getStateReachabilityProbability(s graph.Node) float64 {
+	var out float64 = 0
+	for _, T := range O.leafNodes {
+		out = out + O.getStateQueryProbability(s, T.vector)
+	}
+	return out / float64(len(O.leafNodes))
 }
 
 // Equation (4) From the paper

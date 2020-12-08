@@ -1,13 +1,14 @@
 package navigation
 
 import (
+	"context"
 	"testing"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func TestInitialOrg(t *testing.T) {
+func allocateGraph(t testing.TB) (*tableGraph, *database.DB) {
 	db, err := database.New("../../opendatalink.sqlite")
 	if err != nil {
 		t.Fatal(err)
@@ -16,6 +17,11 @@ func TestInitialOrg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return g, db
+}
+
+func TestInitialOrg(t *testing.T) {
+	g, _ := allocateGraph(t)
 	if it := g.To(g.root.ID()); it.Len() != 0 {
 		t.Error("root has an in-edge")
 	}
@@ -24,4 +30,37 @@ func TestInitialOrg(t *testing.T) {
 			t.Error("node does not have 2 or 0 children")
 		}
 	}
+}
+
+func BenchmarkInitialOrg(b *testing.B) {
+	g, db := allocateGraph(b)
+
+	count := db.QueryRowContext(context.Background(), `
+	SELECT COUNT(*)
+	FROM metadata_vectors
+	WHERE dataset_id IN (
+		SELECT dataset_id
+		FROM metadata
+		WHERE categories LIKE '%education%')
+	`)
+	var out int
+
+	count.Scan(&out)
+	b.Logf("Root Node:\nType: %T\nVector Length: %v", g.root, len(toDSNode(g.root).vector))
+	b.Logf("Number of Tables: %v", out)
+	b.Logf("Number of Tables (Graph): %v", len(g.leafNodes))
+	b.Logf("Number of Nodes: %v", g.Nodes().Len())
+}
+
+func BenchmarkInitialOrgEffectiveness(b *testing.B) {
+	g, _ := allocateGraph(b)
+	b.ResetTimer()
+	b.Logf("Organization Effectiveness: %v", g.getOrganizationEffectiveness())
+}
+
+func BenchmarkLevelSearch(b *testing.B) {
+	g, _ := allocateGraph(b)
+
+	b.ResetTimer()
+	g.regenLevels()
 }
