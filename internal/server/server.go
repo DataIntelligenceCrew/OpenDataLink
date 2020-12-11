@@ -4,15 +4,18 @@ package server
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/index"
+	nav "github.com/DataIntelligenceCrew/OpenDataLink/internal/navigation"
 	"github.com/ekzhu/lshensemble"
 )
 
@@ -25,6 +28,7 @@ type Server struct {
 	joinabilityIndex     *lshensemble.LshEnsemble
 	mux                  sync.Mutex // Guards access to templates
 	templates            map[string]*template.Template
+	organization         *nav.TableGraph
 }
 
 // Config is used to configure the server.
@@ -35,6 +39,7 @@ type Config struct {
 	MetadataIndex        *index.MetadataIndex
 	JoinabilityThreshold float64
 	JoinabilityIndex     *lshensemble.LshEnsemble
+	Organization         *nav.TableGraph
 }
 
 // New creates a new Server with the given configuration.
@@ -50,6 +55,7 @@ func New(cfg *Config) (*Server, error) {
 		metadataIndex:        cfg.MetadataIndex,
 		joinabilityThreshold: cfg.JoinabilityThreshold,
 		joinabilityIndex:     cfg.JoinabilityIndex,
+		organization:         cfg.Organization,
 	}, nil
 }
 
@@ -62,7 +68,36 @@ func (s *Server) Install() {
 	http.HandleFunc("/joinable-columns", s.handleJoinableColumns)
 	http.HandleFunc("/unionable-tables", s.handleUnionableTables)
 
+	http.HandleFunc("/navigation/get-root", s.handleNavGetRoot)
+	http.HandleFunc("/navigation/get-word", s.handleNavGetWord)
+	http.HandleFunc("/navigation/get-node", s.handleNavGetNode)
+
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
+}
+
+func (s *Server) handleNavGetRoot(w http.ResponseWriter, req *http.Request) {
+	s.serveJson(w, nav.ToServeableNode(s.organization, s.organization.GetRootNode()))
+}
+
+func (s *Server) handleNavGetWord(w http.ResponseWriter, req *http.Request) {
+	nodeID, err := strconv.ParseInt(req.URL.Path[len("/navigation/get-word"):], 10, 64)
+
+	if err != nil {
+		http.NotFound(w, req)
+		return
+	}
+
+	s.serveJson(w, nav.ToDSNode(s.organization.Node(nodeID)).Datasets())
+}
+
+func (s *Server) handleNavGetNode(w http.ResponseWriter, req *http.Request) {
+	nodeID, err := strconv.ParseInt(req.URL.Path[len("/navigation/get-word"):], 10, 64)
+	if err != nil {
+		http.NotFound(w, req)
+		return
+	}
+
+	s.serveJson(w, nav.ToServeableNode(s.organization, s.organization.Node(nodeID)))
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, req *http.Request) {
@@ -218,6 +253,10 @@ func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request)
 func serverError(w http.ResponseWriter, err error) {
 	log.Print(err)
 	http.Error(w, err.Error(), http.StatusInternalServerError)
+}
+
+func (s *Server) serveJson(w http.ResponseWriter, data interface{}) {
+	json.NewEncoder(w).Encode(data)
 }
 
 func (s *Server) servePage(w http.ResponseWriter, page string, data interface{}) {

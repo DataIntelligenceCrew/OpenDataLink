@@ -23,17 +23,22 @@ type Config struct {
 
 const embeddingDim = 300
 
-type node struct {
+// Node a dataset specific node
+type Node struct {
 	id                 int64
 	cachedReachibility float64
 	vector             []float32       // Metadata embedding vector for the datasets
 	datasets           map[string]bool // Set of dataset IDs of children
 }
 
-func (n *node) ID() int64 { return n.id }
+// ID Returns the ID of the node, in order to conform to the graph.Node interface
+func (n *Node) ID() int64 { return n.id }
 
-func newDatasetNode(id int64, vector []float32, datasetID string) *node {
-	return &node{
+// Datasets returns the set of dataset IDs of the child nodes
+func (n *Node) Datasets() map[string]bool { return n.datasets }
+
+func newDatasetNode(id int64, vector []float32, datasetID string) *Node {
+	return &Node{
 		id:                 id,
 		vector:             vector,
 		cachedReachibility: 0,
@@ -41,7 +46,7 @@ func newDatasetNode(id int64, vector []float32, datasetID string) *node {
 	}
 }
 
-func newMergedNode(id int64, a, b *node) *node {
+func newMergedNode(id int64, a, b *Node) *Node {
 	vec := make([]float32, embeddingDim)
 	vec32.Add(vec, a.vector)
 	vec32.Add(vec, b.vector)
@@ -49,32 +54,38 @@ func newMergedNode(id int64, a, b *node) *node {
 	vec32.Normalize(vec)
 
 	datasets := make(map[string]bool)
-	for _, n := range []*node{a, b} {
+	for _, n := range []*Node{a, b} {
 		for k, v := range n.datasets {
 			datasets[k] = v
 		}
 	}
-	return &node{id, 0, vec, datasets}
+	return &Node{id, 0, vec, datasets}
 }
 
-type tableGraph struct {
+// TableGraph the custom graph structure for an organization
+type TableGraph struct {
 	*simple.DirectedGraph
 	config    *Config
 	root      graph.Node
 	rootPaths path.Shortest
-	leafNodes []*node
+	leafNodes []*Node
+}
+
+// NewConfig makes a new organization configuration
+func NewConfig(gamma, threshold float64) *Config {
+	return newConfig(gamma, threshold)
 }
 
 func newConfig(gamma, threshold float64) *Config {
 	return &Config{gamma, threshold}
 }
 
-func newGraph(cfg *Config) *tableGraph {
-	return &tableGraph{simple.NewDirectedGraph(), cfg, nil, path.Shortest{}, make([]*node, 0)}
+func newGraph(cfg *Config) *TableGraph {
+	return &TableGraph{simple.NewDirectedGraph(), cfg, nil, path.Shortest{}, make([]*Node, 0)}
 }
 
 // addDatasetNodes creates nodes for the datasets and adds them to the graph.
-func (O *tableGraph) addDatasetNodes(db *database.DB) error {
+func (O *TableGraph) addDatasetNodes(db *database.DB) error {
 	rows, err := db.Query(`
 	SELECT dataset_id, emb
 	FROM metadata_vectors
@@ -107,7 +118,7 @@ func (O *tableGraph) addDatasetNodes(db *database.DB) error {
 	return rows.Err()
 }
 
-func (O *tableGraph) addMergedNode(a, b *node) *node {
+func (O *TableGraph) addMergedNode(a, b *Node) *Node {
 	id := O.NewNode().ID()
 	node := newMergedNode(id, a, b)
 	O.AddNode(node)
@@ -117,9 +128,9 @@ func (O *tableGraph) addMergedNode(a, b *node) *node {
 }
 
 // vectors returns the vectors of the nodes in g and the corresponding IDs.
-func (O *tableGraph) vectors() (vectors []float32, ids []int64) {
+func (O *TableGraph) vectors() (vectors []float32, ids []int64) {
 	for it := O.Nodes(); it.Next(); {
-		node := it.Node().(*node)
+		node := it.Node().(*Node)
 		vectors = append(vectors, node.vector...)
 		ids = append(ids, node.id)
 	}
@@ -129,16 +140,16 @@ func (O *tableGraph) vectors() (vectors []float32, ids []int64) {
 // index is an index over the vectors of nodes in a graph.
 type index struct {
 	idx *faiss.Index
-	g   *tableGraph
+	g   *TableGraph
 }
 
 // nodePair stores the similarity of two nodes.
 type nodePair struct {
-	a, b   *node
+	a, b   *Node
 	cosine float32
 }
 
-func buildIndex(g *tableGraph) (*index, error) {
+func buildIndex(g *TableGraph) (*index, error) {
 	idx, err := faiss.IndexFactory(embeddingDim, "IDMap,Flat", faiss.MetricInnerProduct)
 	if err != nil {
 		return nil, err
@@ -154,11 +165,11 @@ func (idx *index) ntotal() int64 {
 	return idx.idx.Ntotal()
 }
 
-func (idx *index) add(n *node) error {
+func (idx *index) add(n *Node) error {
 	return idx.idx.AddWithIDs(n.vector, []int64{n.id})
 }
 
-func (idx *index) remove(nodes ...*node) error {
+func (idx *index) remove(nodes ...*Node) error {
 	var ids []int64
 	for _, node := range nodes {
 		ids = append(ids, node.id)
@@ -179,7 +190,7 @@ func (idx *index) remove(nodes ...*node) error {
 //
 // The neighbor will not be the query itself if the query is in the index.
 // Node: this function may panic if there is only one node in the index.
-func (idx *index) query(n *node) (*nodePair, error) {
+func (idx *index) query(n *Node) (*nodePair, error) {
 	cos, ids, err := idx.idx.Search(n.vector, 2)
 	if err != nil {
 		return nil, err
@@ -188,7 +199,7 @@ func (idx *index) query(n *node) (*nodePair, error) {
 	if id == n.id {
 		id, sim = ids[1], cos[1]
 	}
-	res := idx.g.Node(id).(*node)
+	res := idx.g.Node(id).(*Node)
 
 	return &nodePair{n, res, sim}, nil
 }
@@ -205,12 +216,12 @@ func (idx *index) allPairs() ([]*nodePair, error) {
 	results := make([]*nodePair, len(qids))
 
 	for i, qid := range qids {
-		a := idx.g.Node(qid).(*node)
+		a := idx.g.Node(qid).(*Node)
 		id, sim := ids[i*2+1], cos[i*2+1]
 		if id == a.id {
 			id, sim = ids[i*2], cos[i*2]
 		}
-		b := idx.g.Node(id).(*node)
+		b := idx.g.Node(id).(*Node)
 
 		results[i] = &nodePair{a, b, sim}
 	}
@@ -242,11 +253,16 @@ func (pq *priorityQueue) Pop() interface{} {
 	return item
 }
 
+// Build Initial Org constructs an organization for initialization purposes
+func BuildInitialOrg(db *database.DB, cfg *Config) (*TableGraph, error) {
+	return buildInitialOrg(db, cfg)
+}
+
 // buildInitialOrg builds the initial organization of the navigation graph.
 //
 // The initial organization is a binary tree created by joining the most similar
 // pairs of nodes under a parent node.
-func buildInitialOrg(db *database.DB, cfg *Config) (*tableGraph, error) {
+func buildInitialOrg(db *database.DB, cfg *Config) (*TableGraph, error) {
 	// Create nodes for all datasets and add them to graph.
 	g := newGraph(cfg)
 	if err := g.addDatasetNodes(db); err != nil {
@@ -316,8 +332,8 @@ func buildInitialOrg(db *database.DB, cfg *Config) (*tableGraph, error) {
 	return g, nil
 }
 
-func toDSNode(s graph.Node) *node {
-	original, ok := s.(*node)
+func ToDSNode(s graph.Node) *Node {
+	original, ok := s.(*Node)
 	if ok {
 		return original
 	}
@@ -333,27 +349,27 @@ func similarity(a []float32, b []float32) float32 { // TODO: Is something like t
 	return (aDotB / normAB)
 }
 
-func (O *tableGraph) regenLevels() {
+func (O *TableGraph) regenLevels() {
 	O.rootPaths = path.DijkstraFrom(O.root, O.DirectedGraph)
 }
 
-func (O *tableGraph) getLevel(s graph.Node) float64 {
+func (O *TableGraph) getLevel(s graph.Node) float64 {
 	_, weight := O.rootPaths.To(s.ID())
 	return weight
 
 }
 
-func (O *tableGraph) getChildren(s graph.Node) graph.Nodes {
+func (O *TableGraph) getChildren(s graph.Node) graph.Nodes {
 	return O.From(s.ID())
 }
 
-func (O *tableGraph) getParents(s graph.Node) graph.Nodes {
+func (O *TableGraph) getParents(s graph.Node) graph.Nodes {
 	return O.To(s.ID())
 }
 
 // Equation (6) from the paper
 // Note that this is not quite the same, since we eliminate equation 5 since vectors are computed at the table level
-func (O *tableGraph) getOrganizationEffectiveness() float64 {
+func (O *TableGraph) getOrganizationEffectiveness() float64 {
 	var out float64 = 0
 	for _, j := range O.leafNodes {
 		var prob = O.getStateQueryProbability(j, j.vector)
@@ -363,18 +379,18 @@ func (O *tableGraph) getOrganizationEffectiveness() float64 {
 }
 
 // Equation (10) from the paper
-func (O *tableGraph) getStateReachabilityProbability(s graph.Node) float64 {
+func (O *TableGraph) getStateReachabilityProbability(s graph.Node) float64 {
 	var out float64 = 0
 	for _, T := range O.leafNodes {
 		out = out + O.getStateQueryProbability(s, T.vector)
 	}
-	s.(*node).cachedReachibility = out / float64(len(O.leafNodes))
-	return s.(*node).cachedReachibility
+	s.(*Node).cachedReachibility = out / float64(len(O.leafNodes))
+	return s.(*Node).cachedReachibility
 }
 
 // Equation (4) From the paper
 // TODO: Investigate a better way to do this perhaps using paths API
-func (O *tableGraph) getStateQueryProbability(s graph.Node, X []float32) float64 {
+func (O *TableGraph) getStateQueryProbability(s graph.Node, X []float32) float64 {
 	parents := O.getParents(s)
 	var out float64 = 0
 
@@ -396,14 +412,14 @@ func (O *tableGraph) getStateQueryProbability(s graph.Node, X []float32) float64
 }
 
 // Equation (1) From the paper
-func (O *tableGraph) getStateTransitionProbability(c graph.Node, s graph.Node, X []float32) float64 {
-	nc := c.(*node)
-	ns := s.(*node)
+func (O *TableGraph) getStateTransitionProbability(c graph.Node, s graph.Node, X []float32) float64 {
+	nc := c.(*Node)
+	ns := s.(*Node)
 	eGammaChildrenS := math.Exp(O.config.gamma / float64(O.getChildren(s).Len()))
 	var divisor float64 = 0
 	children := O.getChildren(s)
 	for children.Next() {
-		var curr = children.Node().(*node)
+		var curr = children.Node().(*Node)
 		var sim = similarity(curr.vector, X)
 		divisor += math.Pow(eGammaChildrenS, float64(sim))
 	}
@@ -411,27 +427,27 @@ func (O *tableGraph) getStateTransitionProbability(c graph.Node, s graph.Node, X
 	return math.Pow(eGammaChildrenS, float64(similarity(nc.vector, ns.vector))) / divisor
 }
 
-func (O *tableGraph) deleteParent(s graph.Node) {
+func (O *TableGraph) deleteParent(s graph.Node) {
 	return
 }
 
-func (O *tableGraph) addParent(s graph.Node) {
+func (O *TableGraph) addParent(s graph.Node) {
 	return
 }
 
-func (O *tableGraph) chooseApplyOperation(s graph.Node, idx *index) *tableGraph {
+func (O *TableGraph) chooseApplyOperation(s graph.Node, idx *index) *TableGraph {
 	return nil
 }
 
-func (O *tableGraph) chooseOperableState(pq *ReachabilityPriorityQueue) graph.Node {
+func (O *TableGraph) chooseOperableState(pq *ReachabilityPriorityQueue) graph.Node {
 	return pq.Pop().(graph.Node)
 }
 
-func (O *tableGraph) terminate() bool {
+func (O *TableGraph) terminate() bool {
 	return false
 }
 
-func (O *tableGraph) accept(Op *tableGraph, p float64) (*tableGraph, float64) {
+func (O *TableGraph) accept(Op *TableGraph, p float64) (*TableGraph, float64) {
 	var Pp = Op.getOrganizationEffectiveness()
 	if Pp > p {
 		return Op, Pp
@@ -441,7 +457,7 @@ func (O *tableGraph) accept(Op *tableGraph, p float64) (*tableGraph, float64) {
 
 // Use priority queue to get the least reachable nodes at a given level
 // It implements the container/heap interface.
-type ReachabilityPriorityQueue []*node
+type ReachabilityPriorityQueue []*Node
 
 func (pq ReachabilityPriorityQueue) Len() int { return len(pq) }
 func (pq ReachabilityPriorityQueue) Less(i, j int) bool {
@@ -450,7 +466,7 @@ func (pq ReachabilityPriorityQueue) Less(i, j int) bool {
 func (pq ReachabilityPriorityQueue) Swap(i, j int) { pq[i], pq[j] = pq[j], pq[i] }
 
 func (pq *ReachabilityPriorityQueue) Push(x interface{}) {
-	*pq = append(*pq, x.(*node))
+	*pq = append(*pq, x.(*Node))
 }
 
 func (pq *ReachabilityPriorityQueue) Pop() interface{} {
@@ -462,15 +478,15 @@ func (pq *ReachabilityPriorityQueue) Pop() interface{} {
 	return item
 }
 
-func (O *tableGraph) nodeArray() []*node {
-	var out []*node
+func (O *TableGraph) nodeArray() []*Node {
+	var out []*Node
 	for it := O.Nodes(); it.Next(); {
-		out = append(out, it.Node().(*node))
+		out = append(out, it.Node().(*Node))
 	}
 	return out
 }
 
-func (O *tableGraph) organize() (*tableGraph, error) {
+func (O *TableGraph) organize() (*TableGraph, error) {
 	idx, err := buildIndex(O)
 	if err != nil {
 		return nil, err
@@ -489,7 +505,7 @@ func (O *tableGraph) organize() (*tableGraph, error) {
 	return O, nil
 }
 
-func (O *tableGraph) toVisualizer() {
+func (O *TableGraph) toVisualizer() {
 	data, err := dot.Marshal(O, "Organization", "", "")
 	if err != nil {
 		fmt.Println(err)

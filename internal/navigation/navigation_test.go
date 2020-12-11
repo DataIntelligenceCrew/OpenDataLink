@@ -8,7 +8,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func allocateGraph(t testing.TB) (*tableGraph, *database.DB) {
+func allocateGraph(t testing.TB) (*TableGraph, *database.DB) {
 	db, err := database.New("../../opendatalink.sqlite")
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +46,7 @@ func BenchmarkInitialOrg(b *testing.B) {
 	var out int
 
 	count.Scan(&out)
-	b.Logf("Root Node:\nType: %T\nVector Length: %v", g.root, len(toDSNode(g.root).vector))
+	b.Logf("Root Node:\nType: %T\nVector Length: %v", g.root, len(ToDSNode(g.root).vector))
 	b.Logf("Number of Tables: %v", out)
 	b.Logf("Number of Tables (Graph): %v", len(g.leafNodes))
 	b.Logf("Number of Nodes: %v", g.Nodes().Len())

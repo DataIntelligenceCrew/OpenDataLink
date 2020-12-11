@@ -8,6 +8,7 @@ import (
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/config"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/index"
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/navigation"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/server"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -36,12 +37,15 @@ func main() {
 	}
 	log.Println("built joinability index")
 
+	organization, err := navigation.BuildInitialOrg(db, navigation.NewConfig(0.5, 0.5))
+	log.Println("Built Initial Organization")
 	s, err := server.New(&server.Config{
 		DevMode:              true,
 		DB:                   db,
 		MetadataIndex:        metadataIndex,
 		JoinabilityThreshold: joinabilityThreshold,
 		JoinabilityIndex:     joinabilityIndex,
+		Organization:         organization,
 	})
 	if err != nil {
 		log.Fatal(err)
