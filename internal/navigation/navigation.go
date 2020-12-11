@@ -2,31 +2,42 @@ package navigation
 
 import (
 	"container/heap"
+	"fmt"
+	"io/ioutil"
 	"math"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
 	"github.com/DataIntelligenceCrew/go-faiss"
 	"gonum.org/v1/gonum/graph"
+	"gonum.org/v1/gonum/graph/encoding/dot"
 	"gonum.org/v1/gonum/graph/path"
 	"gonum.org/v1/gonum/graph/simple"
 )
 
+// Config for an organization
+type Config struct {
+	gamma     float64
+	threshold float64
+}
+
 const embeddingDim = 300
 
 type node struct {
-	id       int64
-	vector   []float32       // Metadata embedding vector for the datasets
-	datasets map[string]bool // Set of dataset IDs of children
+	id                 int64
+	cachedReachibility float64
+	vector             []float32       // Metadata embedding vector for the datasets
+	datasets           map[string]bool // Set of dataset IDs of children
 }
 
 func (n *node) ID() int64 { return n.id }
 
 func newDatasetNode(id int64, vector []float32, datasetID string) *node {
 	return &node{
-		id:       id,
-		vector:   vector,
-		datasets: map[string]bool{datasetID: true},
+		id:                 id,
+		vector:             vector,
+		cachedReachibility: 0,
+		datasets:           map[string]bool{datasetID: true},
 	}
 }
 
@@ -43,18 +54,23 @@ func newMergedNode(id int64, a, b *node) *node {
 			datasets[k] = v
 		}
 	}
-	return &node{id, vec, datasets}
+	return &node{id, 0, vec, datasets}
 }
 
 type tableGraph struct {
 	*simple.DirectedGraph
+	config    *Config
 	root      graph.Node
 	rootPaths path.Shortest
 	leafNodes []*node
 }
 
-func newGraph() *tableGraph {
-	return &tableGraph{simple.NewDirectedGraph(), nil, path.Shortest{}, make([]*node, 0)}
+func newConfig(gamma, threshold float64) *Config {
+	return &Config{gamma, threshold}
+}
+
+func newGraph(cfg *Config) *tableGraph {
+	return &tableGraph{simple.NewDirectedGraph(), cfg, nil, path.Shortest{}, make([]*node, 0)}
 }
 
 // addDatasetNodes creates nodes for the datasets and adds them to the graph.
@@ -230,9 +246,9 @@ func (pq *priorityQueue) Pop() interface{} {
 //
 // The initial organization is a binary tree created by joining the most similar
 // pairs of nodes under a parent node.
-func buildInitialOrg(db *database.DB) (*tableGraph, error) {
+func buildInitialOrg(db *database.DB, cfg *Config) (*tableGraph, error) {
 	// Create nodes for all datasets and add them to graph.
-	g := newGraph()
+	g := newGraph(cfg)
 	if err := g.addDatasetNodes(db); err != nil {
 		return nil, err
 	}
@@ -305,12 +321,9 @@ func toDSNode(s graph.Node) *node {
 	if ok {
 		return original
 	}
-		print("Cast Failed")
-		return nil
-	}
-
-// gamma Model Hyperparameter, strictly positive
-const gamma float64 = 1
+	print("Cast Failed")
+	return nil
+}
 
 // $\kappa$ from the paper. Simply the Cosine Similarity
 func similarity(a []float32, b []float32) float32 { // TODO: Is something like this already in FAISS?
@@ -355,7 +368,8 @@ func (O *tableGraph) getStateReachabilityProbability(s graph.Node) float64 {
 	for _, T := range O.leafNodes {
 		out = out + O.getStateQueryProbability(s, T.vector)
 	}
-	return out / float64(len(O.leafNodes))
+	s.(*node).cachedReachibility = out / float64(len(O.leafNodes))
+	return s.(*node).cachedReachibility
 }
 
 // Equation (4) From the paper
@@ -385,14 +399,104 @@ func (O *tableGraph) getStateQueryProbability(s graph.Node, X []float32) float64
 func (O *tableGraph) getStateTransitionProbability(c graph.Node, s graph.Node, X []float32) float64 {
 	nc := c.(*node)
 	ns := s.(*node)
-	eGammaChildrenS := math.Exp(gamma / float64(O.getChildren(s).Len()))
+	eGammaChildrenS := math.Exp(O.config.gamma / float64(O.getChildren(s).Len()))
 	var divisor float64 = 0
 	children := O.getChildren(s)
 	for children.Next() {
 		var curr = children.Node().(*node)
 		var sim = similarity(curr.vector, X)
 		divisor += math.Pow(eGammaChildrenS, float64(sim))
-}
+	}
 
 	return math.Pow(eGammaChildrenS, float64(similarity(nc.vector, ns.vector))) / divisor
+}
+
+func (O *tableGraph) deleteParent(s graph.Node) {
+	return
+}
+
+func (O *tableGraph) addParent(s graph.Node) {
+	return
+}
+
+func (O *tableGraph) chooseApplyOperation(s graph.Node, idx *index) *tableGraph {
+	return nil
+}
+
+func (O *tableGraph) chooseOperableState(pq *ReachabilityPriorityQueue) graph.Node {
+	return pq.Pop().(graph.Node)
+}
+
+func (O *tableGraph) terminate() bool {
+	return false
+}
+
+func (O *tableGraph) accept(Op *tableGraph, p float64) (*tableGraph, float64) {
+	var Pp = Op.getOrganizationEffectiveness()
+	if Pp > p {
+		return Op, Pp
+	}
+	return O, p
+}
+
+// Use priority queue to get the least reachable nodes at a given level
+// It implements the container/heap interface.
+type ReachabilityPriorityQueue []*node
+
+func (pq ReachabilityPriorityQueue) Len() int { return len(pq) }
+func (pq ReachabilityPriorityQueue) Less(i, j int) bool {
+	return pq[i].cachedReachibility < pq[j].cachedReachibility
+}
+func (pq ReachabilityPriorityQueue) Swap(i, j int) { pq[i], pq[j] = pq[j], pq[i] }
+
+func (pq *ReachabilityPriorityQueue) Push(x interface{}) {
+	*pq = append(*pq, x.(*node))
+}
+
+func (pq *ReachabilityPriorityQueue) Pop() interface{} {
+	old := *pq
+	n := len(*pq)
+	item := old[n-1]
+	old[n-1] = nil
+	*pq = old[:n-1]
+	return item
+}
+
+func (O *tableGraph) nodeArray() []*node {
+	var out []*node
+	for it := O.Nodes(); it.Next(); {
+		out = append(out, it.Node().(*node))
+	}
+	return out
+}
+
+func (O *tableGraph) organize() (*tableGraph, error) {
+	idx, err := buildIndex(O)
+	if err != nil {
+		return nil, err
+	}
+
+	var pq ReachabilityPriorityQueue = O.nodeArray()
+	heap.Init(&pq)
+
+	var p = O.getOrganizationEffectiveness()
+	for !O.terminate() {
+		var s = O.chooseOperableState(&pq)
+		var Op = O.chooseApplyOperation(s, idx)
+		O, p = O.accept(Op, p)
+	}
+
+	return O, nil
+}
+
+func (O *tableGraph) toVisualizer() {
+	data, err := dot.Marshal(O, "Organization", "", "")
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = ioutil.WriteFile("/tmp/graph", data, 0644)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("Wrote graph data")
 }

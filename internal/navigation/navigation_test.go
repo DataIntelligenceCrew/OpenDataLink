@@ -13,7 +13,7 @@ func allocateGraph(t testing.TB) (*tableGraph, *database.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := buildInitialOrg(db)
+	g, err := buildInitialOrg(db, newConfig(2, 0.5))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +50,8 @@ func BenchmarkInitialOrg(b *testing.B) {
 	b.Logf("Number of Tables: %v", out)
 	b.Logf("Number of Tables (Graph): %v", len(g.leafNodes))
 	b.Logf("Number of Nodes: %v", g.Nodes().Len())
+
+	g.toVisualizer()
 }
 
 func BenchmarkInitialOrgEffectiveness(b *testing.B) {
