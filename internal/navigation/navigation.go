@@ -31,6 +31,8 @@ type Node struct {
 	datasets           map[string]bool // Set of dataset IDs of children
 }
 
+func (n *Node) Vector() []float32 { return n.vector }
+
 // ID Returns the ID of the node, in order to conform to the graph.Node interface
 func (n *Node) ID() int64 { return n.id }
 
@@ -356,7 +358,6 @@ func (O *TableGraph) regenLevels() {
 func (O *TableGraph) getLevel(s graph.Node) float64 {
 	_, weight := O.rootPaths.To(s.ID())
 	return weight
-
 }
 
 func (O *TableGraph) getChildren(s graph.Node) graph.Nodes {
@@ -427,34 +428,6 @@ func (O *TableGraph) getStateTransitionProbability(c graph.Node, s graph.Node, X
 	return math.Pow(eGammaChildrenS, float64(similarity(nc.vector, ns.vector))) / divisor
 }
 
-func (O *TableGraph) deleteParent(s graph.Node) {
-	return
-}
-
-func (O *TableGraph) addParent(s graph.Node) {
-	return
-}
-
-func (O *TableGraph) chooseApplyOperation(s graph.Node, idx *index) *TableGraph {
-	return nil
-}
-
-func (O *TableGraph) chooseOperableState(pq *ReachabilityPriorityQueue) graph.Node {
-	return pq.Pop().(graph.Node)
-}
-
-func (O *TableGraph) terminate() bool {
-	return false
-}
-
-func (O *TableGraph) accept(Op *TableGraph, p float64) (*TableGraph, float64) {
-	var Pp = Op.getOrganizationEffectiveness()
-	if Pp > p {
-		return Op, Pp
-	}
-	return O, p
-}
-
 // Use priority queue to get the least reachable nodes at a given level
 // It implements the container/heap interface.
 type ReachabilityPriorityQueue []*Node
@@ -486,6 +459,86 @@ func (O *TableGraph) nodeArray() []*Node {
 	return out
 }
 
+// Wrapper around GoNum's implementation
+func (O *TableGraph) CopyOrganization() *TableGraph {
+	out := &TableGraph{simple.NewDirectedGraph(), O.config, O.root, path.Shortest{}, O.leafNodes}
+	graph.Copy(out, O)
+
+	return out
+}
+
+func (O *TableGraph) deleteParent(s graph.Node, idx *index) error {
+	parents := O.getParents(s) // Get the parents of the input node
+	reachability := math.Inf(1)
+	var lowestNode graph.Node // Find the least reachable parent
+	for parents.Next() {
+		var nodeReach = O.getStateReachabilityProbability(parents.Node())
+		if nodeReach < reachability {
+			reachability = nodeReach
+			lowestNode = parents.Node()
+		}
+	}
+
+	children := O.getChildren(lowestNode) // Find the children of the least reachable parent
+
+	lowestParents := O.getParents(s) // Get the parents of the least reachable parent
+
+	for children.Next() { // Connect each of the children of the least reachable parent (including s) to each of the parents of the least reachable parent of s
+		for lowestParents.Next() {
+			O.NewEdge(children.Node(), lowestParents.Node())
+		}
+		O.RemoveEdge(children.Node().ID(), lowestNode.ID())
+		lowestParents.Reset()
+	}
+
+	// Remove the least reachable parent of s.
+	idx.remove(ToDSNode(lowestNode))
+	O.RemoveNode(lowestNode.ID())
+
+	return nil
+}
+
+func (O *TableGraph) addParent(s graph.Node, idx *index) error {
+	_, simNodes, err := idx.idx.Search(s.(*Node).vector, 600) // Search over 10 percent of the nodes. This probably will need to be tuned, but this whole section does
+	if err != nil {
+		return err
+	}
+	for i := range simNodes {
+		if O.getLevel(O.Node(simNodes[i])) == O.getLevel(s)-1 {
+			O.NewEdge(s, O.Node(simNodes[i]))
+			return nil
+		}
+	}
+	return nil
+}
+
+func (O *TableGraph) chooseApplyOperation(s graph.Node, idx *index) *TableGraph {
+	op := O.CopyOrganization()
+	if op.getStateReachabilityProbability(s) >= op.config.threshold {
+		op.addParent(s, idx)
+	} else {
+		op.deleteParent(s, idx)
+	}
+
+	return op
+}
+
+func (O *TableGraph) chooseOperableState(pq *ReachabilityPriorityQueue) graph.Node {
+	return pq.Pop().(graph.Node)
+}
+
+func (O *TableGraph) terminate() bool {
+	return false
+}
+
+func (O *TableGraph) accept(Op *TableGraph, p float64) (*TableGraph, float64) {
+	var Pp = Op.getOrganizationEffectiveness()
+	if Pp > p {
+		return Op, Pp
+	}
+	return O, p
+}
+
 func (O *TableGraph) organize() (*TableGraph, error) {
 	idx, err := buildIndex(O)
 	if err != nil {
@@ -498,7 +551,7 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 	var p = O.getOrganizationEffectiveness()
 	for !O.terminate() {
 		var s = O.chooseOperableState(&pq)
-		var Op = O.chooseApplyOperation(s, idx)
+		var Op = O.chooseApplyOperation(s, idx) // O is in the index passed
 		O, p = O.accept(Op, p)
 	}
 
