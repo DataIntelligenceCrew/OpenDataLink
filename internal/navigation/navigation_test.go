@@ -51,6 +51,8 @@ func BenchmarkInitialOrg(b *testing.B) {
 	b.Logf("Number of Tables (Graph): %v", len(g.leafNodes))
 	b.Logf("Number of Nodes: %v", g.Nodes().Len())
 
+	b.Log(GetNodeJSON(g, g.root))
+
 	g.toVisualizer()
 }
 
