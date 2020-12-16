@@ -17,8 +17,9 @@ import (
 
 // Config for an organization
 type Config struct {
-	gamma     float64
-	threshold float64
+	gamma          float64
+	threshold      float64
+	terminationRes int
 }
 
 const embeddingDim = 300
@@ -74,12 +75,12 @@ type TableGraph struct {
 }
 
 // NewConfig makes a new organization configuration
-func NewConfig(gamma, threshold float64) *Config {
-	return newConfig(gamma, threshold)
+func NewConfig(gamma, threshold float64, terminationRes int) *Config {
+	return newConfig(gamma, threshold, terminationRes)
 }
 
-func newConfig(gamma, threshold float64) *Config {
-	return &Config{gamma, threshold}
+func newConfig(gamma, threshold float64, terminationRes int) *Config {
+	return &Config{gamma, threshold, terminationRes}
 }
 
 func newGraph(cfg *Config) *TableGraph {
@@ -527,8 +528,30 @@ func (O *TableGraph) chooseOperableState(pq *ReachabilityPriorityQueue) graph.No
 	return pq.Pop().(graph.Node)
 }
 
-func (O *TableGraph) terminate() bool {
-	return false
+type terminationMonitor struct {
+	window     []float64
+	cursor     int
+	iterations int
+}
+
+func (t *terminationMonitor) updateWindow(s float64) {
+	t.window[t.cursor] = s
+	t.cursor = (t.cursor + 1) % len(t.window)
+	t.iterations++
+}
+
+func (t *terminationMonitor) calcAvg() float64 {
+	var out float64
+
+	for i := range t.window {
+		out += t.window[i]
+	}
+
+	return out / float64(len(t.window))
+}
+
+func (O *TableGraph) terminate(t *terminationMonitor, pp float64) bool {
+	return (t.calcAvg() - pp) < O.config.threshold
 }
 
 func (O *TableGraph) accept(Op *TableGraph, p float64) (*TableGraph, float64) {
@@ -540,6 +563,8 @@ func (O *TableGraph) accept(Op *TableGraph, p float64) (*TableGraph, float64) {
 }
 
 func (O *TableGraph) organize() (*TableGraph, error) {
+	t := &terminationMonitor{make([]float64, O.config.terminationRes), 0, 0}
+
 	idx, err := buildIndex(O)
 	if err != nil {
 		return nil, err
@@ -549,10 +574,11 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 	heap.Init(&pq)
 
 	var p = O.getOrganizationEffectiveness()
-	for !O.terminate() {
+	for !O.terminate(t, p) {
 		var s = O.chooseOperableState(&pq)
 		var Op = O.chooseApplyOperation(s, idx) // O is in the index passed
 		O, p = O.accept(Op, p)
+		t.updateWindow(p)
 	}
 
 	return O, nil

@@ -13,7 +13,7 @@ func allocateGraph(t testing.TB) (*TableGraph, *database.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := buildInitialOrg(db, newConfig(2, 0.5))
+	g, err := buildInitialOrg(db, newConfig(2, 0.01, 100))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,6 +54,18 @@ func BenchmarkInitialOrg(b *testing.B) {
 	b.Log(GetNodeJSON(g, g.root))
 
 	g.toVisualizer()
+}
+
+func BenchmarkOrganize(b *testing.B) {
+	g, _ := allocateGraph(b)
+	b.Logf("Initial Organization Effectiveness: %v", g.getOrganizationEffectiveness())
+	b.ResetTimer()
+	gprime, err := g.organize()
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.StopTimer()
+	b.Logf("Optimized Organization Effectiveness: %v", gprime.getOrganizationEffectiveness())
 }
 
 func BenchmarkInitialOrgEffectiveness(b *testing.B) {
