@@ -513,14 +513,18 @@ func (O *TableGraph) addParent(s graph.Node, idx *index) error {
 	return nil
 }
 
+// TODO: Make this more intelligent.
 func (O *TableGraph) chooseApplyOperation(s graph.Node, idx *index) *TableGraph {
 	op := O.CopyOrganization()
-	if op.getStateReachabilityProbability(s) >= op.config.threshold {
+	if op.getStateReachabilityProbability(s) <= 1e-5 {
+		fmt.Print("Choose add parent ")
 		op.addParent(s, idx)
 	} else {
+		fmt.Print("Choose del parent ")
 		op.deleteParent(s, idx)
 	}
-
+	fmt.Print(s.ID())
+	fmt.Println()
 	return op
 }
 
@@ -546,14 +550,24 @@ func (t *terminationMonitor) calcAvg() float64 {
 	for i := range t.window {
 		out += t.window[i]
 	}
+	divisor := float64(len(t.window)) // math.Min(float64(t.iterations), float64(len(t.window)))
 
-	return out / float64(len(t.window))
+	return out / divisor
 }
 
 func (O *TableGraph) terminate(t *terminationMonitor, pp float64) bool {
-	return (t.calcAvg() - pp) < O.config.threshold
+	if t.calcAvg() == 0.0 {
+		fmt.Println(t.window)
+		return false
+	}
+	pctchange := (pp - t.calcAvg()) / pp
+	fmt.Printf("iterations: %v\n", t.iterations)
+	fmt.Printf("\tt avg: %.10e\n", t.calcAvg())
+	fmt.Printf("\tDelta Org effectiveness: %v\n", pp-t.window[t.cursor])
+	fmt.Printf("\tnew org effectiveness: %.10e\n", pp)
+	fmt.Printf("\tPercent Change from P: %v\n", pctchange)
+	return (pctchange < O.config.threshold) && pctchange > 0
 }
-
 func (O *TableGraph) accept(Op *TableGraph, p float64) (*TableGraph, float64) {
 	var Pp = Op.getOrganizationEffectiveness()
 	if Pp > p {
@@ -574,9 +588,10 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 	heap.Init(&pq)
 
 	var p = O.getOrganizationEffectiveness()
+	fmt.Println(t.window)
 	for !O.terminate(t, p) {
 		var s = O.chooseOperableState(&pq)
-		var Op = O.chooseApplyOperation(s, idx) // O is in the index passed
+		var Op = O.chooseApplyOperation(s, idx)
 		O, p = O.accept(Op, p)
 		t.updateWindow(p)
 	}

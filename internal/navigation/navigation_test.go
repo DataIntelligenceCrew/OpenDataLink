@@ -13,7 +13,7 @@ func allocateGraph(t testing.TB) (*TableGraph, *database.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := buildInitialOrg(db, newConfig(2, 0.01, 100))
+	g, err := buildInitialOrg(db, newConfig(1.5, 1e-20, 100))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,6 +54,18 @@ func BenchmarkInitialOrg(b *testing.B) {
 	b.Log(GetNodeJSON(g, g.root))
 
 	g.toVisualizer()
+}
+
+func BenchmarkAvgNodeReachability(b *testing.B) {
+	g, _ := allocateGraph(b)
+	b.ResetTimer()
+	var avg float64
+	for it := g.Nodes(); it.Next(); {
+		prob := g.getStateReachabilityProbability(it.Node())
+		avg += prob
+		b.Logf("Node: %v, Prob: %v", it.Node().ID(), prob)
+	}
+	b.Logf("Average reachability: %v", avg/float64(g.Nodes().Len()))
 }
 
 func BenchmarkOrganize(b *testing.B) {
