@@ -17,9 +17,10 @@ import (
 
 // Config for an organization
 type Config struct {
-	gamma          float64
-	threshold      float64
-	terminationRes int
+	gamma                 float64
+	threshold             float64
+	terminationRes        int
+	parentDeleteThreshold float64
 }
 
 const embeddingDim = 300
@@ -75,12 +76,12 @@ type TableGraph struct {
 }
 
 // NewConfig makes a new organization configuration
-func NewConfig(gamma, threshold float64, terminationRes int) *Config {
-	return newConfig(gamma, threshold, terminationRes)
+func NewConfig(gamma, threshold float64, terminationRes int, parentDelThreshold float64) *Config {
+	return newConfig(gamma, threshold, terminationRes, parentDelThreshold)
 }
 
-func newConfig(gamma, threshold float64, terminationRes int) *Config {
-	return &Config{gamma, threshold, terminationRes}
+func newConfig(gamma, threshold float64, terminationRes int, parentDelThreshold float64) *Config {
+	return &Config{gamma, threshold, terminationRes, parentDelThreshold}
 }
 
 func newGraph(cfg *Config) *TableGraph {
@@ -414,9 +415,9 @@ func (O *TableGraph) getStateQueryProbability(s graph.Node, X []float32) float64
 }
 
 // Equation (1) From the paper
+// The probability of going to a state c from a parent state s
 func (O *TableGraph) getStateTransitionProbability(c graph.Node, s graph.Node, X []float32) float64 {
 	nc := c.(*Node)
-	ns := s.(*Node)
 	eGammaChildrenS := math.Exp(O.config.gamma / float64(O.getChildren(s).Len()))
 	var divisor float64 = 0
 	children := O.getChildren(s)
@@ -426,7 +427,7 @@ func (O *TableGraph) getStateTransitionProbability(c graph.Node, s graph.Node, X
 		divisor += math.Pow(eGammaChildrenS, float64(sim))
 	}
 
-	return math.Pow(eGammaChildrenS, float64(similarity(nc.vector, ns.vector))) / divisor
+	return math.Pow(eGammaChildrenS, float64(similarity(nc.vector, X))) / divisor
 }
 
 // Use priority queue to get the least reachable nodes at a given level
@@ -435,7 +436,7 @@ type ReachabilityPriorityQueue []*Node
 
 func (pq ReachabilityPriorityQueue) Len() int { return len(pq) }
 func (pq ReachabilityPriorityQueue) Less(i, j int) bool {
-	return pq[i].cachedReachibility < pq[j].cachedReachibility
+	return pq[i].cachedReachibility > pq[j].cachedReachibility
 }
 func (pq ReachabilityPriorityQueue) Swap(i, j int) { pq[i], pq[j] = pq[j], pq[i] }
 
@@ -462,7 +463,7 @@ func (O *TableGraph) nodeArray() []*Node {
 
 // Wrapper around GoNum's implementation
 func (O *TableGraph) CopyOrganization() *TableGraph {
-	out := &TableGraph{simple.NewDirectedGraph(), O.config, O.root, path.Shortest{}, O.leafNodes}
+	out := &TableGraph{simple.NewDirectedGraph(), O.config, O.root, O.rootPaths, O.leafNodes}
 	graph.Copy(out, O)
 
 	return out
@@ -482,16 +483,16 @@ func (O *TableGraph) deleteParent(s graph.Node, idx *index) error {
 
 	children := O.getChildren(lowestNode) // Find the children of the least reachable parent
 
-	lowestParents := O.getParents(s) // Get the parents of the least reachable parent
+	lowestParents := O.getParents(lowestNode) // Get the parents of the least reachable parent
 
 	for children.Next() { // Connect each of the children of the least reachable parent (including s) to each of the parents of the least reachable parent of s
 		for lowestParents.Next() {
-			O.NewEdge(children.Node(), lowestParents.Node())
+			O.SetEdge(O.NewEdge(lowestParents.Node(), children.Node()))
+			fmt.Printf("Created Edge from %v to %v\n", lowestParents.Node().ID(), s.ID())
 		}
-		O.RemoveEdge(children.Node().ID(), lowestNode.ID())
+		O.RemoveEdge(lowestNode.ID(), children.Node().ID())
 		lowestParents.Reset()
 	}
-
 	// Remove the least reachable parent of s.
 	idx.remove(ToDSNode(lowestNode))
 	O.RemoveNode(lowestNode.ID())
@@ -500,36 +501,53 @@ func (O *TableGraph) deleteParent(s graph.Node, idx *index) error {
 }
 
 func (O *TableGraph) addParent(s graph.Node, idx *index) error {
-	_, simNodes, err := idx.idx.Search(s.(*Node).vector, 600) // Search over 10 percent of the nodes. This probably will need to be tuned, but this whole section does
+	_, simNodes, err := idx.idx.Search(s.(*Node).vector, 6000) // Search over 10 percent of the nodes. This probably will need to be tuned, but this whole section does
 	if err != nil {
 		return err
 	}
+	parents := O.getParents(s)
 	for i := range simNodes {
 		if O.getLevel(O.Node(simNodes[i])) == O.getLevel(s)-1 {
-			O.NewEdge(s, O.Node(simNodes[i]))
-			return nil
+			var nullify bool = false
+			for parents.Next() {
+				if parents.Node().ID() == simNodes[i] {
+					nullify = true
+				}
+			}
+			if !nullify {
+				O.SetEdge(O.NewEdge(O.Node(simNodes[i]), s))
+				fmt.Printf("Added edge from %v (level %v) to %v (level %v)\n", simNodes[i], O.getLevel(O.Node(simNodes[i])), s.ID(), O.getLevel(s))
+				break
+			}
+			parents.Reset()
 		}
 	}
 	return nil
 }
 
 // TODO: Make this more intelligent.
-func (O *TableGraph) chooseApplyOperation(s graph.Node, idx *index) *TableGraph {
+func (O *TableGraph) chooseApplyOperation(s graph.Node, idx *index, pq *ReachabilityPriorityQueue) *TableGraph {
 	op := O.CopyOrganization()
-	if op.getStateReachabilityProbability(s) <= 1e-5 {
-		fmt.Print("Choose add parent ")
+	s.(*Node).cachedReachibility = op.getStateReachabilityProbability(s)
+	fmt.Printf("Node %v reachability: %v\n", s.ID(), s.(*Node).cachedReachibility)
+	if s.(*Node).cachedReachibility >= op.config.parentDeleteThreshold {
+		fmt.Print("Choose add parent\n")
 		op.addParent(s, idx)
 	} else {
-		fmt.Print("Choose del parent ")
+		fmt.Print("Choose del parent\n")
 		op.deleteParent(s, idx)
 	}
-	fmt.Print(s.ID())
-	fmt.Println()
+	op.getStateReachabilityProbability(s)
+	fmt.Printf("New Node %v reachability: %v\n", s.ID(), s.(*Node).cachedReachibility)
 	return op
 }
 
 func (O *TableGraph) chooseOperableState(pq *ReachabilityPriorityQueue) graph.Node {
-	return pq.Pop().(graph.Node)
+	node := pq.Pop().(graph.Node)
+	if O.Node(node.ID()) != nil {
+		return node
+	}
+	return O.chooseOperableState(pq)
 }
 
 type terminationMonitor struct {
@@ -568,9 +586,11 @@ func (O *TableGraph) terminate(t *terminationMonitor, pp float64) bool {
 	fmt.Printf("\tPercent Change from P: %v\n", pctchange)
 	return (pctchange < O.config.threshold) && pctchange > 0
 }
-func (O *TableGraph) accept(Op *TableGraph, p float64) (*TableGraph, float64) {
+func (O *TableGraph) accept(Op *TableGraph, p float64, s graph.Node, pq *ReachabilityPriorityQueue) (*TableGraph, float64) {
 	var Pp = Op.getOrganizationEffectiveness()
-	if Pp > p {
+	fmt.Printf("Delta Reachability: %v\n", p-Pp)
+	if Pp >= p {
+		heap.Init(pq)
 		return Op, Pp
 	}
 	return O, p
@@ -578,7 +598,6 @@ func (O *TableGraph) accept(Op *TableGraph, p float64) (*TableGraph, float64) {
 
 func (O *TableGraph) organize() (*TableGraph, error) {
 	t := &terminationMonitor{make([]float64, O.config.terminationRes), 0, 0}
-
 	idx, err := buildIndex(O)
 	if err != nil {
 		return nil, err
@@ -591,8 +610,8 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 	fmt.Println(t.window)
 	for !O.terminate(t, p) {
 		var s = O.chooseOperableState(&pq)
-		var Op = O.chooseApplyOperation(s, idx)
-		O, p = O.accept(Op, p)
+		var Op = O.chooseApplyOperation(s, idx, &pq)
+		O, p = O.accept(Op, p, s, &pq)
 		t.updateWindow(p)
 	}
 
