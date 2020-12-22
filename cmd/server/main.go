@@ -37,7 +37,7 @@ func main() {
 	}
 	log.Println("built joinability index")
 
-	organization, err := navigation.BuildInitialOrg(db, navigation.NewConfig(0.5, 0.5, 100))
+	organization, err := navigation.BuildInitialOrg(db, &navigation.Config{Gamma: 2.5, TerminationThreshold: 1e-15, TerminationWindow: 25, OperationThreshold: 1e-35})
 	log.Println("Built Initial Organization")
 	s, err := server.New(&server.Config{
 		DevMode:              true,

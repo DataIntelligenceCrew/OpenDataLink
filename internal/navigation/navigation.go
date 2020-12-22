@@ -17,10 +17,10 @@ import (
 
 // Config for an organization
 type Config struct {
-	gamma                 float64
-	threshold             float64
-	terminationRes        int
-	parentDeleteThreshold float64
+	Gamma                float64 // The model's gamma parameter, a penalty for a node having too many children
+	TerminationThreshold float64 // The threshold below which the learning algorithm stops
+	TerminationWindow    int     // The number of prior iterations to account for in terminating
+	OperationThreshold   float64 // The node reachability below which we choose to delete a parent instead of adding a parent
 }
 
 const embeddingDim = 300
@@ -73,15 +73,6 @@ type TableGraph struct {
 	root      graph.Node
 	rootPaths path.Shortest
 	leafNodes []*Node
-}
-
-// NewConfig makes a new organization configuration
-func NewConfig(gamma, threshold float64, terminationRes int, parentDelThreshold float64) *Config {
-	return newConfig(gamma, threshold, terminationRes, parentDelThreshold)
-}
-
-func newConfig(gamma, threshold float64, terminationRes int, parentDelThreshold float64) *Config {
-	return &Config{gamma, threshold, terminationRes, parentDelThreshold}
 }
 
 func newGraph(cfg *Config) *TableGraph {
@@ -257,16 +248,11 @@ func (pq *priorityQueue) Pop() interface{} {
 	return item
 }
 
-// Build Initial Org constructs an organization for initialization purposes
-func BuildInitialOrg(db *database.DB, cfg *Config) (*TableGraph, error) {
-	return buildInitialOrg(db, cfg)
-}
-
 // buildInitialOrg builds the initial organization of the navigation graph.
 //
 // The initial organization is a binary tree created by joining the most similar
 // pairs of nodes under a parent node.
-func buildInitialOrg(db *database.DB, cfg *Config) (*TableGraph, error) {
+func BuildInitialOrg(db *database.DB, cfg *Config) (*TableGraph, error) {
 	// Create nodes for all datasets and add them to graph.
 	g := newGraph(cfg)
 	if err := g.addDatasetNodes(db); err != nil {
@@ -348,7 +334,7 @@ func ToDSNode(s graph.Node) *Node {
 // $\kappa$ from the paper. Simply the Cosine Similarity
 func similarity(a []float32, b []float32) float32 { // TODO: Is something like this already in FAISS?
 	aDotB := vec32.Dot(a, b)
-	normAB := vec32.Norm(a) * vec32.Norm(b)
+	normAB := float32(1) // vec32.Norm(a) * vec32.Norm(b) // We don't need this code because the vectors are already normalized
 
 	return (aDotB / normAB)
 }
@@ -418,7 +404,7 @@ func (O *TableGraph) getStateQueryProbability(s graph.Node, X []float32) float64
 // The probability of going to a state c from a parent state s
 func (O *TableGraph) getStateTransitionProbability(c graph.Node, s graph.Node, X []float32) float64 {
 	nc := c.(*Node)
-	eGammaChildrenS := math.Exp(O.config.gamma / float64(O.getChildren(s).Len()))
+	eGammaChildrenS := math.Exp(O.config.Gamma / float64(O.getChildren(s).Len()))
 	var divisor float64 = 0
 	children := O.getChildren(s)
 	for children.Next() {
@@ -501,7 +487,7 @@ func (O *TableGraph) deleteParent(s graph.Node, idx *index) error {
 }
 
 func (O *TableGraph) addParent(s graph.Node, idx *index) error {
-	_, simNodes, err := idx.idx.Search(s.(*Node).vector, 6000) // Search over 10 percent of the nodes. This probably will need to be tuned, but this whole section does
+	_, simNodes, err := idx.idx.Search(s.(*Node).vector, 600) // Search over 10 percent of the nodes. This probably will need to be tuned, but this whole section does
 	if err != nil {
 		return err
 	}
@@ -530,7 +516,7 @@ func (O *TableGraph) chooseApplyOperation(s graph.Node, idx *index, pq *Reachabi
 	op := O.CopyOrganization()
 	s.(*Node).cachedReachibility = op.getStateReachabilityProbability(s)
 	fmt.Printf("Node %v reachability: %v\n", s.ID(), s.(*Node).cachedReachibility)
-	if s.(*Node).cachedReachibility >= op.config.parentDeleteThreshold {
+	if s.(*Node).cachedReachibility >= op.config.OperationThreshold {
 		fmt.Print("Choose add parent\n")
 		op.addParent(s, idx)
 	} else {
@@ -584,7 +570,7 @@ func (O *TableGraph) terminate(t *terminationMonitor, pp float64) bool {
 	fmt.Printf("\tDelta Org effectiveness: %v\n", pp-t.window[t.cursor])
 	fmt.Printf("\tnew org effectiveness: %.10e\n", pp)
 	fmt.Printf("\tPercent Change from P: %v\n", pctchange)
-	return (pctchange < O.config.threshold) && pctchange > 0
+	return (pctchange < O.config.TerminationThreshold) && pctchange > 0
 }
 func (O *TableGraph) accept(Op *TableGraph, p float64, s graph.Node, pq *ReachabilityPriorityQueue) (*TableGraph, float64) {
 	var Pp = Op.getOrganizationEffectiveness()
@@ -597,7 +583,7 @@ func (O *TableGraph) accept(Op *TableGraph, p float64, s graph.Node, pq *Reachab
 }
 
 func (O *TableGraph) organize() (*TableGraph, error) {
-	t := &terminationMonitor{make([]float64, O.config.terminationRes), 0, 0}
+	t := &terminationMonitor{make([]float64, O.config.TerminationWindow), 0, 0}
 	idx, err := buildIndex(O)
 	if err != nil {
 		return nil, err

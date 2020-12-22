@@ -8,4 +8,4 @@ fasttext.sqlite
 /process_metadata
 /server
 /sketch_columns
-.vscode/launch.json
+.vscode/*
