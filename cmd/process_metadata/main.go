@@ -10,55 +10,16 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/config"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/wordemb"
 	"github.com/ekzhu/go-fasttext"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 const datasetsDir = "datasets"
-
-var wordSepRe = regexp.MustCompile(`\W+`)
-
-// Lucene stop words list.
-var stopwords = map[string]bool{
-	"a":     true,
-	"an":    true,
-	"and":   true,
-	"are":   true,
-	"as":    true,
-	"at":    true,
-	"be":    true,
-	"but":   true,
-	"by":    true,
-	"for":   true,
-	"if":    true,
-	"in":    true,
-	"into":  true,
-	"is":    true,
-	"it":    true,
-	"no":    true,
-	"not":   true,
-	"of":    true,
-	"on":    true,
-	"or":    true,
-	"such":  true,
-	"that":  true,
-	"the":   true,
-	"their": true,
-	"then":  true,
-	"there": true,
-	"these": true,
-	"they":  true,
-	"this":  true,
-	"to":    true,
-	"was":   true,
-	"will":  true,
-	"with":  true,
-}
 
 type metadata struct {
 	Resource *struct {
@@ -106,9 +67,7 @@ func removeDuplicates(s []string) []string {
 }
 
 func metadataVector(ft *fasttext.FastText, m *metadata) ([]float32, error) {
-	vec := make([]float32, fasttext.Dim)
-
-	metadataText := []string{
+	return wordemb.Vector(ft, []string{
 		m.Resource.Name,
 		m.Resource.Description,
 		m.Resource.Attribution,
@@ -116,27 +75,7 @@ func metadataVector(ft *fasttext.FastText, m *metadata) ([]float32, error) {
 		strings.Join(m.Classification.Tags, " "),
 		m.Classification.DomainCategory,
 		strings.Join(m.Classification.DomainTags, " "),
-	}
-	for _, words := range metadataText {
-		for _, word := range wordSepRe.Split(words, -1) {
-			if stopwords[strings.ToLower(word)] {
-				continue
-			}
-			emb, err := ft.GetEmb(word)
-			if err != nil {
-				if err == fasttext.ErrNoEmbFound {
-					continue
-				}
-				return nil, err
-			}
-			vec32.Normalize(emb)
-			vec32.Add(vec, emb)
-		}
-	}
-	vec32.Scale(vec, 1/float32(len(vec)))
-	vec32.Normalize(vec)
-
-	return vec, nil
+	})
 }
 
 func main() {
@@ -218,7 +157,7 @@ func main() {
 		}
 
 		emb, err := metadataVector(ft, &m)
-		if err != nil {
+		if err != nil && err != wordemb.ErrNoEmb {
 			log.Fatalf("dataset %v: %v", datasetID, err)
 		}
 		_, err = vectorStmt.Exec(m.Resource.ID, vec32.Bytes(emb))
