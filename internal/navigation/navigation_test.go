@@ -13,7 +13,7 @@ func allocateGraph(t testing.TB) (*TableGraph, *database.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := BuildInitialOrg(db, &Config{Gamma: 20, TerminationThreshold: 1.25e-15, TerminationWindow: 100, OperationThreshold: 4e-2})
+	g, err := BuildInitialOrg(db, &Config{Gamma: 20, TerminationThreshold: 1.25e-15, TerminationWindow: 500, OperationThreshold: 4e-2})
 	if err != nil {
 		t.Fatal(err)
 	}
