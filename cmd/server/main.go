@@ -10,6 +10,7 @@ import (
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/index"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/navigation"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/server"
+	"github.com/ekzhu/go-fasttext"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -24,6 +25,9 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+
+	ft := fasttext.NewFastText(config.FasttextPath())
+	defer ft.Close()
 
 	metadataIndex, err := index.BuildMetadataEmbeddingIndex(db)
 	if err != nil {
@@ -42,6 +46,7 @@ func main() {
 	s, err := server.New(&server.Config{
 		DevMode:              true,
 		DB:                   db,
+		FastText:             ft,
 		MetadataIndex:        metadataIndex,
 		JoinabilityThreshold: joinabilityThreshold,
 		JoinabilityIndex:     joinabilityIndex,

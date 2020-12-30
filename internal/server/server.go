@@ -17,6 +17,7 @@ import (
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/index"
 	nav "github.com/DataIntelligenceCrew/OpenDataLink/internal/navigation"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/wordparser"
+	"github.com/ekzhu/go-fasttext"
 	"github.com/ekzhu/lshensemble"
 )
 
@@ -24,6 +25,7 @@ import (
 type Server struct {
 	devMode              bool
 	db                   *database.DB
+	ft                   *fasttext.FastText
 	metadataIndex        *index.MetadataIndex
 	joinabilityThreshold float64
 	joinabilityIndex     *lshensemble.LshEnsemble
@@ -38,6 +40,7 @@ type Config struct {
 	// If DevMode is true, templates will not be cached.
 	DevMode              bool
 	DB                   *database.DB
+	FastText             *fasttext.FastText
 	MetadataIndex        *index.MetadataIndex
 	JoinabilityThreshold float64
 	JoinabilityIndex     *lshensemble.LshEnsemble
@@ -54,6 +57,7 @@ func New(cfg *Config) (*Server, error) {
 	return &Server{
 		devMode:              cfg.DevMode,
 		db:                   cfg.DB,
+		ft:                   cfg.FastText,
 		templates:            templates,
 		metadataIndex:        cfg.MetadataIndex,
 		joinabilityThreshold: cfg.JoinabilityThreshold,
