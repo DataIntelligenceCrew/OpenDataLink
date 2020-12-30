@@ -88,7 +88,7 @@ func (O *TableGraph) addDatasetNodes(db *database.DB) error {
 		SELECT dataset_id
 		FROM metadata
 		WHERE categories LIKE '%education%'
-	)`)
+	) ORDER BY RANDOM() LIMIT 50`)
 	if err != nil {
 		return err
 	}
@@ -352,6 +352,10 @@ func (O *TableGraph) getChildren(s graph.Node) graph.Nodes {
 	return O.From(s.ID())
 }
 
+func (O *TableGraph) isLeafNode(s graph.Node) bool {
+	return O.getChildren(s).Len() == 0
+}
+
 func (O *TableGraph) getParents(s graph.Node) graph.Nodes {
 	return O.To(s.ID())
 }
@@ -446,19 +450,86 @@ func (O *TableGraph) nodeArray() []*Node {
 	}
 	return out
 }
+func (n *Node) copy() *Node {
+	var out *Node
+	out = new(Node)
+	out.id = n.id
+	out.cachedReachibility = n.cachedReachibility
+	out.vector = n.vector
+	out.datasets = n.datasets
+	return out
+}
 
 // Wrapper around GoNum's implementation
 func (O *TableGraph) CopyOrganization() *TableGraph {
-	out := &TableGraph{simple.NewDirectedGraph(), O.config, O.root, O.rootPaths, O.leafNodes}
-	graph.Copy(out, O)
+	out := &TableGraph{simple.NewDirectedGraph(), O.config, O.root.(*Node).copy(), O.rootPaths, make([]*Node, 0)}
+
+	// Deep copy nodes
+	for it := O.Nodes(); it.Next(); {
+		toAdd := it.Node().(*Node).copy()
+		out.AddNode(toAdd)
+		if O.isLeafNode(it.Node()) {
+			out.leafNodes = append(out.leafNodes, toAdd)
+		}
+	}
+
+	// Deep copy edges
+	for it := O.Edges(); it.Next(); {
+		from := it.Edge().From().ID()
+		to := it.Edge().To().ID()
+		out.SetEdge(out.NewEdge(out.Node(from), out.Node(to)))
+	}
 
 	return out
 }
 
-func (O *TableGraph) deleteParent(s graph.Node, idx *index) error {
+func (O *TableGraph) getSiblings(s graph.Node) []graph.Node {
+	var out []graph.Node
+	for it := O.getParents(s); it.Next(); {
+		out = append(out, graph.NodesOf(O.getChildren(it.Node()))...)
+	}
+	return out
+}
+
+func (O *TableGraph) eliminateNode(s graph.Node) {
+	children := O.getChildren(s)
+	parents := O.getParents(s)
+
+	for parents.Next() {
+		for children.Next() {
+			O.addEdge(parents.Node(), children.Node())
+		}
+		children.Reset()
+	}
+
+	O.RemoveNode(s.ID())
+}
+
+/* update_vector recursively updates the topic vector of a state based on it's domain
+ *
+ */
+func (O *TableGraph) update_vector(s *Node) []float32 {
+	total := make([]float32, embeddingDim)
+	var n int = 0
+	for it := O.getChildren(s); it.Next(); {
+		if O.getChildren(it.Node()).Len() != 0 {
+			vec32.Add(total, O.update_vector(it.Node().(*Node)))
+		} else {
+			vec32.Add(total, it.Node().(*Node).vector)
+		}
+		n++
+	}
+	vec32.Scale(total, 1/float32(n))
+	vec32.Normalize(total)
+	s.vector = total
+	return total
+}
+
+func (O *TableGraph) deleteParent(s graph.Node, idx *index) ([]graph.Node, error) {
 	parents := O.getParents(s) // Get the parents of the input node
 	reachability := math.Inf(1)
 	var lowestNode graph.Node // Find the least reachable parent
+
 	for parents.Next() {
 		var nodeReach = O.getStateReachabilityProbability(parents.Node())
 		if nodeReach < reachability {
@@ -467,23 +538,38 @@ func (O *TableGraph) deleteParent(s graph.Node, idx *index) error {
 		}
 	}
 
-	children := O.getChildren(lowestNode) // Find the children of the least reachable parent
-
-	lowestParents := O.getParents(lowestNode) // Get the parents of the least reachable parent
-
-	for children.Next() { // Connect each of the children of the least reachable parent (including s) to each of the parents of the least reachable parent of s
-		for lowestParents.Next() {
-			O.SetEdge(O.NewEdge(lowestParents.Node(), children.Node()))
-			fmt.Printf("Created Edge from %v to %v\n", lowestParents.Node().ID(), s.ID())
-		}
-		O.RemoveEdge(lowestNode.ID(), children.Node().ID())
-		lowestParents.Reset()
+	if lowestNode == nil {
+		return nil, nil
 	}
-	// Remove the least reachable parent of s.
-	idx.remove(ToDSNode(lowestNode))
-	O.RemoveNode(lowestNode.ID())
 
-	return nil
+	var removedNodes []graph.Node
+
+	for _, s := range O.getSiblings(lowestNode) {
+		if !O.isLeafNode(s) {
+			O.eliminateNode(s)
+			idx.remove(ToDSNode(s))
+			removedNodes = append(removedNodes, s)
+		}
+	}
+
+	O.eliminateNode(lowestNode)
+	idx.remove(ToDSNode(lowestNode))
+	removedNodes = append(removedNodes, lowestNode)
+
+	return removedNodes, nil
+}
+
+func (O *TableGraph) addEdge(from graph.Node, to graph.Node) bool {
+	if !O.isLeafNode(from) && !O.HasEdgeFromTo(from.ID(), to.ID()) {
+		// vec32.Scale(from.(*Node).vector, float32(O.getChildren(from).Len()))
+		O.SetEdge(O.NewEdge(from, to))
+		// vec32.Add(from.(*Node).vector, to.(*Node).vector)
+		// vec32.Scale(from.(*Node).vector, 1/float32(O.getChildren(from).Len()))
+		// vec32.Normalize(from.(*Node).vector)
+		fmt.Printf("Added edge from %v (level %v) to %v (level %v)\n", from.ID(), O.getLevel(from), to.ID(), O.getLevel(to))
+		return true
+	}
+	return false
 }
 
 func (O *TableGraph) addParent(s graph.Node, idx *index) error {
@@ -492,8 +578,11 @@ func (O *TableGraph) addParent(s graph.Node, idx *index) error {
 		return err
 	}
 	parents := O.getParents(s)
+	if parents.Len() == 0 {
+		return nil
+	}
 	for i := range simNodes {
-		if O.getLevel(O.Node(simNodes[i])) == O.getLevel(s)-1 {
+		if O.Node(simNodes[i]) != nil && O.getLevel(O.Node(simNodes[i])) == O.getLevel(s)-1 {
 			var nullify bool = false
 			for parents.Next() {
 				if parents.Node().ID() == simNodes[i] {
@@ -501,9 +590,11 @@ func (O *TableGraph) addParent(s graph.Node, idx *index) error {
 				}
 			}
 			if !nullify {
-				O.SetEdge(O.NewEdge(O.Node(simNodes[i]), s))
-				fmt.Printf("Added edge from %v (level %v) to %v (level %v)\n", simNodes[i], O.getLevel(O.Node(simNodes[i])), s.ID(), O.getLevel(s))
-				break
+				if O.addEdge(O.Node(simNodes[i]), s) {
+					return nil
+				} else {
+					fmt.Printf("Couldn't add edge from %v to %v\n", simNodes[i], s.ID())
+				}
 			}
 			parents.Reset()
 		}
@@ -528,22 +619,40 @@ func (O *TableGraph) chooseApplyOperation(s graph.Node, idx *index, pq *Reachabi
 	return op
 }
 
-func (O *TableGraph) chooseOperableState(pq *ReachabilityPriorityQueue) graph.Node {
+func (O *TableGraph) chooseOperableState(pq *ReachabilityPriorityQueue, t *terminationMonitor) graph.Node {
 	node := pq.Pop().(graph.Node)
-	if O.Node(node.ID()) != nil {
-		return node
+	var out graph.Node
+	if t.isHung(int(node.ID())) {
+		out = pq.Pop().(graph.Node)
+		pq.Push(node)
+	} else {
+		out = node
 	}
-	return O.chooseOperableState(pq)
+	if O.Node(node.ID()) != nil {
+		return out
+	}
+	return O.chooseOperableState(pq, t)
 }
 
 type terminationMonitor struct {
 	window     []float64
+	nodeWindow []int
 	cursor     int
 	iterations int
 }
 
-func (t *terminationMonitor) updateWindow(s float64) {
+func (t *terminationMonitor) isHung(s int) bool {
+	var out int
+	for i := range t.nodeWindow {
+		out += t.nodeWindow[i]
+	}
+
+	return (out / len(t.nodeWindow)) == s
+}
+
+func (t *terminationMonitor) updateWindow(s float64, i int) {
 	t.window[t.cursor] = s
+	t.nodeWindow[t.cursor] = i
 	t.cursor = (t.cursor + 1) % len(t.window)
 	t.iterations++
 }
@@ -564,26 +673,32 @@ func (O *TableGraph) terminate(t *terminationMonitor, pp float64) bool {
 		fmt.Println(t.window)
 		return false
 	}
-	pctchange := (pp - t.calcAvg()) / pp
+	pctchange := (pp - t.calcAvg()) / t.calcAvg()
 	fmt.Printf("iterations: %v\n", t.iterations)
 	fmt.Printf("\tt avg: %.10e\n", t.calcAvg())
 	fmt.Printf("\tDelta Org effectiveness: %v\n", pp-t.window[t.cursor])
 	fmt.Printf("\tnew org effectiveness: %.10e\n", pp)
 	fmt.Printf("\tPercent Change from P: %v\n", pctchange)
-	return (pctchange < O.config.TerminationThreshold) && pctchange > 0
+	return (pctchange < O.config.TerminationThreshold)
 }
-func (O *TableGraph) accept(Op *TableGraph, p float64, s graph.Node, pq *ReachabilityPriorityQueue) (*TableGraph, float64) {
+
+func (O *TableGraph) accept(Op *TableGraph, p float64, s graph.Node, pq *ReachabilityPriorityQueue, t *terminationMonitor) (*TableGraph, float64) {
 	var Pp = Op.getOrganizationEffectiveness()
+	fmt.Printf("p: %v\n", p)
+	fmt.Printf("Pp: %v\n", Pp)
 	fmt.Printf("Delta Reachability: %v\n", p-Pp)
 	if Pp >= p {
-		heap.Init(pq)
+		if s.(*Node).cachedReachibility != 0 && s.ID() != 0 && !t.isHung(int(s.ID())) {
+			pq.Push(s)
+			heap.Init(pq)
+		}
 		return Op, Pp
 	}
 	return O, p
 }
 
 func (O *TableGraph) organize() (*TableGraph, error) {
-	t := &terminationMonitor{make([]float64, O.config.TerminationWindow), 0, 0}
+	t := &terminationMonitor{make([]float64, O.config.TerminationWindow), make([]int, O.config.TerminationWindow), 0, 0}
 	idx, err := buildIndex(O)
 	if err != nil {
 		return nil, err
@@ -595,21 +710,30 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 	var p = O.getOrganizationEffectiveness()
 	fmt.Println(t.window)
 	for !O.terminate(t, p) {
-		var s = O.chooseOperableState(&pq)
+		p = O.getOrganizationEffectiveness()
+		var s = O.chooseOperableState(&pq, t)
 		var Op = O.chooseApplyOperation(s, idx, &pq)
-		O, p = O.accept(Op, p, s, &pq)
-		t.updateWindow(p)
+		O, p := O.accept(Op, p, s, &pq, t)
+		O.regenLevels()
+		t.updateWindow(p, int(s.ID()))
+		if len(pq) == 0 {
+			for it := O.Nodes(); it.Next(); {
+				O.getStateReachabilityProbability(it.Node().(*Node))
+			}
+			pq = O.nodeArray()
+			heap.Init(&pq)
+		}
 	}
 
 	return O, nil
 }
 
-func (O *TableGraph) toVisualizer() {
+func (O *TableGraph) toVisualizer(path string) {
 	data, err := dot.Marshal(O, "Organization", "", "")
 	if err != nil {
 		fmt.Println(err)
 	}
-	err = ioutil.WriteFile("/tmp/graph", data, 0644)
+	err = ioutil.WriteFile(path, data, 0644)
 	if err != nil {
 		fmt.Println(err)
 	}

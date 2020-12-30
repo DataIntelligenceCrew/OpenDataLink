@@ -13,7 +13,7 @@ func allocateGraph(t testing.TB) (*TableGraph, *database.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := BuildInitialOrg(db, &Config{Gamma: 2.5, TerminationThreshold: 1e-15, TerminationWindow: 25, OperationThreshold: 1e-35})
+	g, err := BuildInitialOrg(db, &Config{Gamma: 20, TerminationThreshold: 1.25e-15, TerminationWindow: 100, OperationThreshold: 4e-2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func BenchmarkInitialOrg(b *testing.B) {
 
 	b.Log(GetNodeJSON(g, g.root))
 
-	g.toVisualizer()
+	// g.toVisualizer()
 }
 
 func BenchmarkAvgNodeReachability(b *testing.B) {
@@ -63,7 +63,6 @@ func BenchmarkAvgNodeReachability(b *testing.B) {
 	for it := g.Nodes(); it.Next(); {
 		prob := g.getStateReachabilityProbability(it.Node())
 		avg += prob
-		b.Logf("Node: %v, Prob: %v", it.Node().ID(), prob)
 	}
 	b.Logf("Average reachability: %v", avg/float64(g.Nodes().Len()))
 }
@@ -71,6 +70,7 @@ func BenchmarkAvgNodeReachability(b *testing.B) {
 func BenchmarkOrganize(b *testing.B) {
 	g, _ := allocateGraph(b)
 	b.Logf("Initial Organization Effectiveness: %v", g.getOrganizationEffectiveness())
+	g.toVisualizer("pre_optimized.dot")
 	b.ResetTimer()
 	gprime, err := g.organize()
 	if err != nil {
@@ -78,6 +78,7 @@ func BenchmarkOrganize(b *testing.B) {
 	}
 	b.StopTimer()
 	b.Logf("Optimized Organization Effectiveness: %v", gprime.getOrganizationEffectiveness())
+	gprime.toVisualizer("post_optimized.dot")
 }
 
 func BenchmarkInitialOrgEffectiveness(b *testing.B) {
