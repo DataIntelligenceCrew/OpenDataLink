@@ -118,31 +118,6 @@ func (db *DB) DatasetName(datasetID string) (string, error) {
 	return name, nil
 }
 
-// NameSplit returns a split version of Metadata.Name()
-func (metadata *Metadata) NameSplit() []string {
-	return strings.Fields(metadata.Name)
-}
-
-// DescriptionSplit returns a split version of Metadata.Description()
-func (metadata *Metadata) DescriptionSplit() []string {
-	return strings.Fields(metadata.Description)
-}
-
-// AttributionSplit returns a split version of Metadata.Attribution()
-func (metadata *Metadata) AttributionSplit() []string {
-	return strings.Fields(metadata.Attribution)
-}
-
-// CategoriesSplit splits categories into a []string
-func CategoriesSplit(categories string) []string {
-	return strings.Split(categories, ",")
-}
-
-// TagsSplit splits tags into a []string
-func TagsSplit(tags string) []string {
-	return strings.Split(tags, ",")
-}
-
 // Metadata returns the metadata for the dataset with the given ID.
 func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 	m := Metadata{DatasetID: datasetID}
@@ -172,10 +147,10 @@ func (db *DB) Metadata(datasetID string) (*Metadata, error) {
 		return nil, err
 	}
 	if categories != "" {
-		m.Categories = CategoriesSplit(categories)
+		m.Categories = strings.Split(categories, ",")
 	}
 	if tags != "" {
-		m.Tags = TagsSplit(tags)
+		m.Tags = strings.Split(tags, ",")
 	}
 
 	return &m, nil
@@ -195,55 +170,4 @@ func (db *DB) MetadataVector(datasetID string) ([]float32, error) {
 		return nil, err
 	}
 	return vec, nil
-}
-
-// MetadataScan extracts a row from rows into a database.Metadata instance
-func MetadataScan(rows *sql.Rows) (*Metadata, error) {
-	var metadata Metadata
-	var categories string
-	var tags string
-	if err := rows.Scan(&metadata.DatasetID, &metadata.Name,
-		&metadata.Description, &metadata.Attribution,
-		&metadata.ContactEmail, &metadata.UpdatedAt,
-		&categories, &tags, &metadata.Permalink); err != nil {
-		return nil, err
-	}
-
-	if categories != "" {
-		metadata.Categories = CategoriesSplit(categories)
-	}
-	if tags != "" {
-		metadata.Tags = TagsSplit(tags)
-	}
-
-	return &metadata, nil
-}
-
-// MetadataIterator provides a iterator over the rows of the metadata
-type MetadataIterator struct {
-	rows *sql.Rows
-}
-
-// NewMetadataIterator contrust a MetadataIterator
-func (db *DB) NewMetadataIterator() (MetadataIterator, error) {
-	rows, err := db.Query("SELECT * from metadata;")
-	if err != nil {
-		return MetadataIterator{}, err
-	}
-	return MetadataIterator{rows}, nil
-}
-
-// HasNext must be called before each call to MetadataIterator.Row()
-func (metadataIterator MetadataIterator) HasNext() bool {
-	return metadataIterator.rows.Next()
-}
-
-// Row returns the current row of metadata from the iterator
-func (metadataIterator MetadataIterator) Row() (*Metadata, error) {
-	return MetadataScan(metadataIterator.rows)
-}
-
-// End prevent all futher enumeration of the iterator
-func (metadataIterator MetadataIterator) End() error {
-	return metadataIterator.rows.Close()
 }
