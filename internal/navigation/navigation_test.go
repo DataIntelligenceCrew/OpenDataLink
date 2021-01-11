@@ -13,7 +13,7 @@ func allocateGraph(t testing.TB) (*TableGraph, *database.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := BuildInitialOrg(db, &Config{Gamma: 20, TerminationThreshold: 1.25e-15, TerminationWindow: 500, OperationThreshold: 4e-2})
+	g, err := BuildInitialOrg(db, &Config{Gamma: 20, TerminationThreshold: 1.25e-15, TerminationWindow: 500, OperationThreshold: 4e-2}, make([]string, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func BenchmarkAvgNodeReachability(b *testing.B) {
 func BenchmarkOrganize(b *testing.B) {
 	g, _ := allocateGraph(b)
 	b.Logf("Initial Organization Effectiveness: %v", g.getOrganizationEffectiveness())
-	g.toVisualizer("pre_optimized.dot")
+	g.ToVisualizer("pre_optimized.dot")
 	b.ResetTimer()
 	gprime, err := g.organize()
 	if err != nil {
@@ -78,7 +78,7 @@ func BenchmarkOrganize(b *testing.B) {
 	}
 	b.StopTimer()
 	b.Logf("Optimized Organization Effectiveness: %v", gprime.getOrganizationEffectiveness())
-	gprime.toVisualizer("post_optimized.dot")
+	gprime.ToVisualizer("post_optimized.dot")
 }
 
 func BenchmarkInitialOrgEffectiveness(b *testing.B) {

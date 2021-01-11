@@ -757,7 +757,7 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 	return O, nil
 }
 
-func (O *TableGraph) toVisualizer(path string) {
+func (O *TableGraph) ToVisualizer(path string) {
 	data, err := dot.Marshal(O, "Organization", "", "")
 	if err != nil {
 		fmt.Println(err)

@@ -40,6 +40,8 @@ func (s *Server) keywordSearch(query string) ([]*database.Metadata, error) {
 	s.organization, err = navigation.BuildOrganization(s.db, s.organizationConfig, datasetIDs)
 	if err != nil {
 		return nil, err
+	} else {
+		s.organization.ToVisualizer("/tmp/graph.dot")
 	}
 	return results, nil
 }
