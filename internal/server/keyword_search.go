@@ -37,7 +37,7 @@ func (s *Server) keywordSearch(query string) ([]*database.Metadata, error) {
 		results = append(results, meta)
 		datasetIDs = append(datasetIDs, meta.DatasetID)
 	}
-	s.organization, err = navigation.BuildOrganization(s.db, s.organizationConfig, datasetIDs)
+	s.organization, err = navigation.BuildOrganization(s.db, s.ft, s.organizationConfig, datasetIDs)
 	if err != nil {
 		return nil, err
 	} else {

@@ -9,6 +9,7 @@ import (
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
 	"github.com/DataIntelligenceCrew/go-faiss"
+	"github.com/ekzhu/go-fasttext"
 	"gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/encoding/dot"
 	"gonum.org/v1/gonum/graph/path"
@@ -31,6 +32,7 @@ type Node struct {
 	cachedReachibility float64
 	vector             []float32       // Metadata embedding vector for the datasets
 	datasets           map[string]bool // Set of dataset IDs of children
+	name               string
 }
 
 func (n *Node) Vector() []float32 { return n.vector }
@@ -63,7 +65,7 @@ func newMergedNode(id int64, a, b *Node) *Node {
 			datasets[k] = v
 		}
 	}
-	return &Node{id, 0, vec, datasets}
+	return &Node{id, 0, vec, datasets, ""}
 }
 
 // TableGraph the custom graph structure for an organization
@@ -244,13 +246,16 @@ func (pq *priorityQueue) Pop() interface{} {
 	return item
 }
 
-func BuildOrganization(db *database.DB, cfg *Config, ids []string) (*TableGraph, error) {
+func BuildOrganization(db *database.DB, ft *fasttext.FastText, cfg *Config, ids []string) (*TableGraph, error) {
 	g, err := BuildInitialOrg(db, cfg, ids)
 	if err != nil {
 		return nil, err
 	}
 	g, err = g.organize()
 	if err != nil {
+		return nil, err
+	}
+	if err := g.labelNodes(db, ft); err != nil {
 		return nil, err
 	}
 	return g, nil
