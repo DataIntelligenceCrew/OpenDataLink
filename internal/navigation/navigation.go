@@ -84,8 +84,8 @@ func (O *TableGraph) addDatasetNodes(db *database.DB, ids []string) error {
 	for _, s := range ids {
 		// Query returning a single item
 		rows, err := db.Query(`
-		SELECT dataset_id, emb FROM metatdata_vectors WHERE dataset_id=
-		` + s + `;`)
+		SELECT dataset_id, emb FROM metadata_vectors WHERE dataset_id=
+		'` + s + `';`)
 		if err != nil {
 			return err
 		}
@@ -244,11 +244,7 @@ func (pq *priorityQueue) Pop() interface{} {
 	return item
 }
 
-func BuildOrganization(cfg *Config, ids []string) (*TableGraph, error) {
-	db, err := database.New("../../opendatalink.sqlite")
-	if err != nil {
-		return nil, err
-	}
+func BuildOrganization(db *database.DB, cfg *Config, ids []string) (*TableGraph, error) {
 	g, err := BuildInitialOrg(db, cfg, ids)
 	if err != nil {
 		return nil, err
