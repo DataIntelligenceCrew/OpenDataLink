@@ -5,7 +5,7 @@
 Open Data Link is a search engine for open data. It supports the following
 search methods:
 
-- Keyword search
+- Semantic keyword search over metadata
 - Similar dataset search using semantic similarity of metadata
 - Joinable table search
 - Unionable table search
