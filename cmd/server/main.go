@@ -41,8 +41,8 @@ func main() {
 	}
 	log.Println("built joinability index")
 
-	organization, err := navigation.BuildInitialOrg(db, &navigation.Config{Gamma: 2.5, TerminationThreshold: 1e-15, TerminationWindow: 25, OperationThreshold: 1e-35})
-	log.Println("Built Initial Organization")
+	orgConf := &navigation.Config{Gamma: 2.5, TerminationThreshold: 1e-15, TerminationWindow: 25, OperationThreshold: 1e-35}
+	
 	s, err := server.New(&server.Config{
 		DevMode:              true,
 		DB:                   db,
@@ -50,7 +50,7 @@ func main() {
 		MetadataIndex:        metadataIndex,
 		JoinabilityThreshold: joinabilityThreshold,
 		JoinabilityIndex:     joinabilityIndex,
-		Organization:         organization,
+		OrganizeConfig:       orgConf,
 	})
 	if err != nil {
 		log.Fatal(err)

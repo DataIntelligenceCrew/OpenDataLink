@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
+	"github.com/DataIntelligenceCrew/OpenDataLink/internal/navigation"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/wordemb"
 )
 
@@ -25,6 +26,7 @@ func (s *Server) keywordSearch(query string) ([]*database.Metadata, error) {
 	if err != nil {
 		return nil, err
 	}
+	datasetIDs := make([]string, 0)
 	var results []*database.Metadata
 
 	for _, id := range ids {
@@ -33,6 +35,11 @@ func (s *Server) keywordSearch(query string) ([]*database.Metadata, error) {
 			return nil, err
 		}
 		results = append(results, meta)
+		datasetIDs = append(datasetIDs, meta.DatasetID)
+	}
+	s.organization, err = navigation.BuildOrganization(s.organizationConfig, datasetIDs)
+	if err != nil {
+		return nil, err
 	}
 	return results, nil
 }

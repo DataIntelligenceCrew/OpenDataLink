@@ -80,21 +80,17 @@ func newGraph(cfg *Config) *TableGraph {
 }
 
 // addDatasetNodes creates nodes for the datasets and adds them to the graph.
-func (O *TableGraph) addDatasetNodes(db *database.DB) error {
-	rows, err := db.Query(`
-	SELECT dataset_id, emb
-	FROM metadata_vectors
-	WHERE dataset_id IN (
-		SELECT dataset_id
-		FROM metadata
-		WHERE categories LIKE '%education%'
-	) ORDER BY RANDOM() LIMIT 50`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
+func (O *TableGraph) addDatasetNodes(db *database.DB, ids []string) error {
+	for _, s := range ids {
+		// Query returning a single item
+		rows, err := db.Query(`
+		SELECT dataset_id, emb FROM metatdata_vectors WHERE dataset_id=
+		` + s + `;`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		rows.Next()
 		var datasetID string
 		var emb []byte
 
@@ -110,7 +106,7 @@ func (O *TableGraph) addDatasetNodes(db *database.DB) error {
 		O.AddNode(n)
 		O.leafNodes = append(O.leafNodes, n)
 	}
-	return rows.Err()
+	return nil
 }
 
 func (O *TableGraph) addMergedNode(a, b *Node) *Node {
@@ -248,14 +244,30 @@ func (pq *priorityQueue) Pop() interface{} {
 	return item
 }
 
+func BuildOrganization(cfg *Config, ids []string) (*TableGraph, error) {
+	db, err := database.New("../../opendatalink.sqlite")
+	if err != nil {
+		return nil, err
+	}
+	g, err := BuildInitialOrg(db, cfg, ids)
+	if err != nil {
+		return nil, err
+	}
+	g, err = g.organize()
+	if err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
 // buildInitialOrg builds the initial organization of the navigation graph.
 //
 // The initial organization is a binary tree created by joining the most similar
 // pairs of nodes under a parent node.
-func BuildInitialOrg(db *database.DB, cfg *Config) (*TableGraph, error) {
+func BuildInitialOrg(db *database.DB, cfg *Config, ids []string) (*TableGraph, error) {
 	// Create nodes for all datasets and add them to graph.
 	g := newGraph(cfg)
-	if err := g.addDatasetNodes(db); err != nil {
+	if err := g.addDatasetNodes(db, ids); err != nil {
 		return nil, err
 	}
 	// Create index over the nodes.

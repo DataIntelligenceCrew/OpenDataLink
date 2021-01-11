@@ -32,6 +32,7 @@ type Server struct {
 	mux                  sync.Mutex // Guards access to templates
 	templates            map[string]*template.Template
 	organization         *nav.TableGraph
+	organizationConfig   *nav.Config
 	parser               *wordparser.WordParser
 }
 
@@ -44,7 +45,7 @@ type Config struct {
 	MetadataIndex        *index.MetadataIndex
 	JoinabilityThreshold float64
 	JoinabilityIndex     *lshensemble.LshEnsemble
-	Organization         *nav.TableGraph
+	OrganizeConfig       *nav.Config
 	Parser               *wordparser.WordParser
 }
 
@@ -62,7 +63,7 @@ func New(cfg *Config) (*Server, error) {
 		metadataIndex:        cfg.MetadataIndex,
 		joinabilityThreshold: cfg.JoinabilityThreshold,
 		joinabilityIndex:     cfg.JoinabilityIndex,
-		organization:         cfg.Organization,
+		organizationConfig:   cfg.OrganizeConfig,
 		parser:               cfg.Parser,
 	}, nil
 }
@@ -88,12 +89,20 @@ func enableCors(w *http.ResponseWriter) {
 }
 
 func (s *Server) handleNavGetRoot(w http.ResponseWriter, req *http.Request) {
+	if s.organization == nil {
+		http.NotFound(w, req)
+		return
+	}
 	log.Println("Answering request to get root node")
 	enableCors(&w)
 	s.serveJson(w, *nav.ToServeableNode(s.organization, s.organization.GetRootNode()))
 }
 
 func (s *Server) handleNavGetWord(w http.ResponseWriter, req *http.Request) {
+	if s.organization == nil {
+		http.NotFound(w, req)
+		return
+	}
 	nodeID, err := strconv.ParseInt(req.URL.Path[len("/navigation/get-word/"):], 10, 64)
 
 	enableCors(&w)
@@ -117,6 +126,10 @@ func (s *Server) handleNavGetWord(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) handleNavGetNode(w http.ResponseWriter, req *http.Request) {
+	if s.organization == nil {
+		http.NotFound(w, req)
+		return
+	}
 	nodeID, err := strconv.ParseInt(req.URL.Path[len("/navigation/get-node/"):], 10, 64)
 
 	enableCors(&w)
