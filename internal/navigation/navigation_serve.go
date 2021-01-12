@@ -2,6 +2,7 @@ package navigation
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/wordparser"
 	"gonum.org/v1/gonum/graph"
@@ -10,6 +11,7 @@ import (
 // ServeableNode a data structure containing node information for the frontend
 type ServeableNode struct {
 	ID        int64
+	NodeName  string
 	ParentIDs []int64
 	ChildIDs  []int64
 }
@@ -37,13 +39,13 @@ func GetNodeJSON(O *TableGraph, s graph.Node) string {
 	for it := O.To(s.ID()); it.Next(); {
 		parentIDs = append(parentIDs, it.Node().ID())
 	}
-
+	fmt.Print(s.(*Node))
 	var childIDs []int64
 	for it := O.From(s.ID()); it.Next(); {
 		childIDs = append(childIDs, it.Node().ID())
 	}
-
-	out, _ := json.Marshal(ServeableNode{ID: s.ID(), ParentIDs: parentIDs, ChildIDs: childIDs})
+	var name = s.(*Node).name
+	out, _ := json.Marshal(ServeableNode{ID: s.ID(), ParentIDs: parentIDs, ChildIDs: childIDs, NodeName: name})
 	return string(out)
 }
 
@@ -58,8 +60,9 @@ func ToServeableNode(O *TableGraph, s graph.Node) *ServeableNode {
 	for it := O.From(s.ID()); it.Next(); {
 		childIDs = append(childIDs, it.Node().ID())
 	}
+	var name = s.(*Node).name
 
-	return &ServeableNode{ID: s.ID(), ParentIDs: parentIDs, ChildIDs: childIDs}
+	return &ServeableNode{ID: s.ID(), ParentIDs: parentIDs, ChildIDs: childIDs, NodeName: name}
 }
 
 func (O *TableGraph) GetRootNode() graph.Node {

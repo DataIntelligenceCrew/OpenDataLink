@@ -48,6 +48,7 @@ func newDatasetNode(id int64, vector []float32, datasetID string) *Node {
 		id:                 id,
 		vector:             vector,
 		cachedReachibility: 0,
+		name:               datasetID,
 		datasets:           map[string]bool{datasetID: true},
 	}
 }
@@ -448,6 +449,7 @@ func (n *Node) copy() *Node {
 	out.vector = make([]float32, embeddingDim)
 	copy(out.vector, n.vector)
 	out.datasets = n.datasets
+	out.name = n.name
 	// fmt.Println(out.vector)
 	return out
 }
@@ -584,6 +586,12 @@ func (O *TableGraph) addParent(s int64, pq *ReachabilityPriorityQueue) error {
 	return nil
 }
 
+func (O *TableGraph) applyDelOperation(s graph.Node, lvl int) *TableGraph {
+	opDel := O.CopyOrganization()
+	opDel.deleteParent(s.ID())
+	return opDel
+}
+
 // TODO: Make this more intelligent.
 func (O *TableGraph) chooseApplyOperation(s graph.Node, level int) *TableGraph {
 	opAdd := O.CopyOrganization()
@@ -662,7 +670,7 @@ func (O *TableGraph) terminate(t *terminationMonitor, pp float64) bool {
 	fmt.Printf("\tDelta Org effectiveness: %v\n", pp-t.window[t.cursor])
 	fmt.Printf("\tnew org effectiveness: %.10e\n", pp)
 	fmt.Printf("\tPercent Change from P: %v\n", pctchange)
-	return (pctchange < O.config.TerminationThreshold)
+	return (pctchange < O.config.TerminationThreshold || t.iterations > 3500)
 }
 
 func (O *TableGraph) accept(Op *TableGraph) (*TableGraph, float64) {
@@ -732,14 +740,16 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 
 	var p = O.getOrganizationEffectiveness()
 	fmt.Println(t.window)
+	for level := range pq {
+		lvl := level
+		for pq[lvl].HasNext() {
+			s := pq[lvl].Pop().(*Node)
+			var Op = O.applyDelOperation(s, lvl)
+			O, p = O.accept(Op)
+		}
+	}
 
-	// I'm sorry for this apalling code
-	// for i := 0; i < 10; i++ {
-	// 	var s = O.chooseOperableState(&pq, t)
-	// 	op := O.CopyOrganization()
-	// 	op.deleteParent(s.ID(), idx)
-	// 	O = op
-	// }
+	pq = O.buildPriorityQueue()
 	for !O.terminate(t, p) {
 		p = O.getOrganizationEffectiveness()
 		for level := range pq {
@@ -760,6 +770,10 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 	}
 
 	return O, nil
+}
+
+func (n *Node) DOTID() string {
+	return "\"" + n.name + "\""
 }
 
 func (O *TableGraph) ToVisualizer(path string) {
