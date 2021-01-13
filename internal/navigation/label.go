@@ -1,7 +1,6 @@
 package navigation
 
 import (
-	"encoding/hex"
 	"math/rand"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
@@ -21,10 +20,20 @@ func (O *TableGraph) labelNodes(db *database.DB, ft *fasttext.FastText) error {
 		if err != nil {
 			return err
 		}
+		if O.isLeafNode(node) {
+			var name string
+			row := db.QueryRow("SELECT name FROM metadata WHERE dataset_id='" + node.name + "';")
+			err := row.Scan(&name)
+			if err == nil {
+				node.name = name
+			} else {
+				println(err)
+			}
+		}
 		if node.name == "" {
 			token := make([]byte, 4)
 			rand.Read(token)
-			node.name = names[0] + " " + hex.EncodeToString(token)
+			node.name = names[0] //+ " " + hex.EncodeToString(token)
 		}
 		println(node.name)
 	}

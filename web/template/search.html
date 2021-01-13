@@ -1,5 +1,8 @@
 {{define "content"}}
+<div>
   <h2>Results for "{{.Query}}"</h2>
+  <p class="right"><a href="/navigation/" target="_blank">Navigate</a></p>
+</div>
 
   {{with .Results}}
     <p>{{len .}} results</p>

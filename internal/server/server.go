@@ -76,7 +76,7 @@ func (s *Server) Install() {
 	http.HandleFunc("/similar-datasets", s.handleSimilarDatasets)
 	http.HandleFunc("/joinable-columns", s.handleJoinableColumns)
 	http.HandleFunc("/unionable-tables", s.handleUnionableTables)
-
+	http.HandleFunc("/navigation/", s.handleNav)
 	http.HandleFunc("/navigation/get-root", s.handleNavGetRoot)
 	http.HandleFunc("/navigation/get-word/", s.handleNavGetWord)
 	http.HandleFunc("/navigation/get-node/", s.handleNavGetNode)
@@ -141,6 +141,24 @@ func (s *Server) handleNavGetNode(w http.ResponseWriter, req *http.Request) {
 	}
 
 	s.serveJson(w, *nav.ToServeableNode(s.organization, s.organization.Node(nodeID)))
+}
+
+func (s *Server) handleNavRoot(w http.ResponseWriter, req *http.Request) {
+	s.servePage(w, "nav", &struct {
+		PageTitle string
+		Node      *nav.ServeableNode
+	}{"Navigation: Root", nav.ToServeableNode(s.organization, s.organization.GetRootNode())})
+}
+
+func (s *Server) handleNav(w http.ResponseWriter, req *http.Request) {
+	nodeID, err := strconv.ParseInt(req.URL.Path[len("/navigation/"):], 10, 64)
+	if err != nil {
+		nodeID = s.organization.GetRootNode().ID()
+	}
+	s.servePage(w, "nav", &struct {
+		PageTitle string
+		Node      *nav.ServeableNode
+	}{"Navigation", nav.ToServeableNode(s.organization, s.organization.Node(nodeID))})
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, req *http.Request) {
@@ -334,6 +352,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		"similar-datasets",
 		"joinable-columns",
 		"unionable-tables",
+		"nav",
 	}
 	templates := make(map[string]*template.Template)
 

@@ -21,7 +21,7 @@ type Config struct {
 	Gamma                float64 // The model's gamma parameter, a penalty for a node having too many children
 	TerminationThreshold float64 // The threshold below which the learning algorithm stops
 	TerminationWindow    int     // The number of prior iterations to account for in terminating
-	OperationThreshold   float64 // The node reachability below which we choose to delete a parent instead of adding a parent
+	MaxIters             int     // The node reachability below which we choose to delete a parent instead of adding a parent
 }
 
 const embeddingDim = 300
@@ -33,6 +33,7 @@ type Node struct {
 	vector             []float32       // Metadata embedding vector for the datasets
 	datasets           map[string]bool // Set of dataset IDs of children
 	name               string
+	dataset            string
 }
 
 func (n *Node) Vector() []float32 { return n.vector }
@@ -49,6 +50,7 @@ func newDatasetNode(id int64, vector []float32, datasetID string) *Node {
 		vector:             vector,
 		cachedReachibility: 0,
 		name:               datasetID,
+		dataset:            datasetID,
 		datasets:           map[string]bool{datasetID: true},
 	}
 }
@@ -66,7 +68,7 @@ func newMergedNode(id int64, a, b *Node) *Node {
 			datasets[k] = v
 		}
 	}
-	return &Node{id, 0, vec, datasets, ""}
+	return &Node{id, 0, vec, datasets, "", ""}
 }
 
 // TableGraph the custom graph structure for an organization
@@ -366,12 +368,30 @@ func (O *TableGraph) getChildren(s graph.Node) graph.Nodes {
 	return O.From(s.ID())
 }
 
+func (O *TableGraph) GetChildren(s graph.Node) []*Node {
+	out := make([]*Node, 0)
+	for iter := O.getChildren(s); iter.Next(); {
+		out = append(out, iter.Node().(*Node))
+	}
+
+	return out
+}
+
 func (O *TableGraph) isLeafNode(s graph.Node) bool {
 	return O.getChildren(s).Len() == 0
 }
 
 func (O *TableGraph) getParents(s graph.Node) graph.Nodes {
 	return O.To(s.ID())
+}
+
+func (O *TableGraph) GetParents(s graph.Node) []*Node {
+	out := make([]*Node, 0)
+	for iter := O.getParents(s); iter.Next(); {
+		out = append(out, iter.Node().(*Node))
+	}
+
+	return out
 }
 
 // Equation (6) from the paper
@@ -450,6 +470,7 @@ func (n *Node) copy() *Node {
 	copy(out.vector, n.vector)
 	out.datasets = n.datasets
 	out.name = n.name
+	out.dataset = n.dataset
 	// fmt.Println(out.vector)
 	return out
 }
@@ -474,6 +495,10 @@ func (O *TableGraph) CopyOrganization() *TableGraph {
 		out.SetEdge(out.NewEdge(out.Node(from), out.Node(to)))
 	}
 	return out
+}
+
+func (O *TableGraph) SetRootName(name string) {
+	O.GetRootNode().(*Node).name = name
 }
 
 func (O *TableGraph) getSiblings(s graph.Node) []graph.Node {
@@ -670,7 +695,7 @@ func (O *TableGraph) terminate(t *terminationMonitor, pp float64) bool {
 	fmt.Printf("\tDelta Org effectiveness: %v\n", pp-t.window[t.cursor])
 	fmt.Printf("\tnew org effectiveness: %.10e\n", pp)
 	fmt.Printf("\tPercent Change from P: %v\n", pctchange)
-	return (pctchange < O.config.TerminationThreshold || t.iterations > 3500)
+	return (pctchange < O.config.TerminationThreshold || t.iterations > O.config.MaxIters)
 }
 
 func (O *TableGraph) accept(Op *TableGraph) (*TableGraph, float64) {
@@ -739,17 +764,19 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 	var pq []ReachabilityPriorityQueue = O.buildPriorityQueue()
 
 	var p = O.getOrganizationEffectiveness()
-	fmt.Println(t.window)
-	for level := range pq {
-		lvl := level
-		for pq[lvl].HasNext() {
-			s := pq[lvl].Pop().(*Node)
-			var Op = O.applyDelOperation(s, lvl)
-			O, p = O.accept(Op)
+	for i := 0; i < 2; i++ {
+		fmt.Println(t.window)
+		for level := range pq {
+			lvl := level
+			for pq[lvl].HasNext() {
+				s := pq[lvl].Pop().(*Node)
+				var Op = O.applyDelOperation(s, lvl)
+				O, p = O.accept(Op)
+			}
 		}
+		pq = O.buildPriorityQueue()
 	}
 
-	pq = O.buildPriorityQueue()
 	for !O.terminate(t, p) {
 		p = O.getOrganizationEffectiveness()
 		for level := range pq {

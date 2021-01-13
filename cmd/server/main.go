@@ -35,13 +35,14 @@ func main() {
 	}
 	log.Println("built metadata embedding index")
 
-	joinabilityIndex, err := index.BuildJoinabilityIndex(db)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("built joinability index")
-
-	orgConf := &navigation.Config{Gamma: 5, TerminationThreshold: 1e-15, TerminationWindow: 301, OperationThreshold: 1e-35}
+	/*
+		joinabilityIndex, err := index.BuildJoinabilityIndex(db)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("built joinability index")
+	*/
+	orgConf := &navigation.Config{Gamma: 30, TerminationThreshold: 1e-15, TerminationWindow: 301, MaxIters: 750}
 
 	s, err := server.New(&server.Config{
 		DevMode:              true,
@@ -49,7 +50,7 @@ func main() {
 		FastText:             ft,
 		MetadataIndex:        metadataIndex,
 		JoinabilityThreshold: joinabilityThreshold,
-		JoinabilityIndex:     joinabilityIndex,
+		JoinabilityIndex:     nil, // joinabilityIndex,
 		OrganizeConfig:       orgConf,
 	})
 	if err != nil {

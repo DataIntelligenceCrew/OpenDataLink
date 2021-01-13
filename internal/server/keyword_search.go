@@ -41,6 +41,7 @@ func (s *Server) keywordSearch(query string) ([]*database.Metadata, error) {
 	if err != nil {
 		return nil, err
 	} else {
+		s.organization.SetRootName(query)
 		s.organization.ToVisualizer("/tmp/graph.dot")
 	}
 	return results, nil

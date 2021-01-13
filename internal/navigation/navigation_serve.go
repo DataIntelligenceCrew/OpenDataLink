@@ -1,68 +1,45 @@
 package navigation
 
 import (
-	"encoding/json"
-	"fmt"
-
-	"github.com/DataIntelligenceCrew/OpenDataLink/internal/wordparser"
 	"gonum.org/v1/gonum/graph"
 )
+
+type IDNamePair struct {
+	ID      int64
+	Name    string
+	Dataset string
+}
 
 // ServeableNode a data structure containing node information for the frontend
 type ServeableNode struct {
 	ID        int64
 	NodeName  string
-	ParentIDs []int64
-	ChildIDs  []int64
-}
-
-type NodeName struct {
-	ID   int64
-	Name string
-}
-
-func GetNodeWord(s graph.Node) (*NodeName, error) {
-	parser, err := wordparser.New("/localdisk2/opendatalink/fasttext.sqlite")
-	if err != nil {
-		return nil, err
-	}
-	out, err := parser.Search(ToDSNode(s).Vector())
-	if err != nil {
-		return nil, err
-	}
-
-	return &NodeName{ID: s.ID(), Name: out}, nil
-}
-
-func GetNodeJSON(O *TableGraph, s graph.Node) string {
-	var parentIDs []int64
-	for it := O.To(s.ID()); it.Next(); {
-		parentIDs = append(parentIDs, it.Node().ID())
-	}
-	fmt.Print(s.(*Node))
-	var childIDs []int64
-	for it := O.From(s.ID()); it.Next(); {
-		childIDs = append(childIDs, it.Node().ID())
-	}
-	var name = s.(*Node).name
-	out, _ := json.Marshal(ServeableNode{ID: s.ID(), ParentIDs: parentIDs, ChildIDs: childIDs, NodeName: name})
-	return string(out)
+	Dataset   string
+	ParentIDs []*IDNamePair
+	ChildIDs  []*IDNamePair
 }
 
 // ToServeableNode converts a node in the organization into a node that is serveable
 func ToServeableNode(O *TableGraph, s graph.Node) *ServeableNode {
-	var parentIDs []int64
+	var parentIDs []*IDNamePair
 	for it := O.To(s.ID()); it.Next(); {
-		parentIDs = append(parentIDs, it.Node().ID())
+		parentIDs = append(parentIDs, &IDNamePair{ID: it.Node().ID(), Name: it.Node().(*Node).name})
 	}
 
-	var childIDs []int64
+	var childIDs []*IDNamePair
 	for it := O.From(s.ID()); it.Next(); {
-		childIDs = append(childIDs, it.Node().ID())
+		if it.Node().(*Node).dataset == "" {
+			childIDs = append(childIDs, &IDNamePair{ID: it.Node().ID(), Name: it.Node().(*Node).name})
+		} else {
+			childIDs = append(childIDs, &IDNamePair{ID: it.Node().ID(), Name: it.Node().(*Node).name, Dataset: it.Node().(*Node).dataset})
+		}
 	}
 	var name = s.(*Node).name
+	var dataset = s.(*Node).dataset
 
-	return &ServeableNode{ID: s.ID(), ParentIDs: parentIDs, ChildIDs: childIDs, NodeName: name}
+	println(name)
+
+	return &ServeableNode{ID: s.ID(), ParentIDs: parentIDs, ChildIDs: childIDs, NodeName: name, Dataset: dataset}
 }
 
 func (O *TableGraph) GetRootNode() graph.Node {
