@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"math/rand"
+	"strconv"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
@@ -690,11 +692,11 @@ func (O *TableGraph) terminate(t *terminationMonitor, pp float64) bool {
 		return false
 	}
 	pctchange := (pp - t.calcAvg()) / t.calcAvg()
-	fmt.Printf("iterations: %v\n", t.iterations)
+	/*fmt.Printf("iterations: %v\n", t.iterations)
 	fmt.Printf("\tt avg: %.10e\n", t.calcAvg())
 	fmt.Printf("\tDelta Org effectiveness: %v\n", pp-t.window[t.cursor])
 	fmt.Printf("\tnew org effectiveness: %.10e\n", pp)
-	fmt.Printf("\tPercent Change from P: %v\n", pctchange)
+	fmt.Printf("\tPercent Change from P: %v\n", pctchange)*/
 	return (pctchange < O.config.TerminationThreshold || t.iterations > O.config.MaxIters)
 }
 
@@ -800,7 +802,13 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 }
 
 func (n *Node) DOTID() string {
-	return "\"" + n.name + " - " + n.dataset + "\""
+	token := make([]byte, 2)
+	rand.Read(token)
+	if n.dataset != "" {
+		return "\"" + n.name + " - " + n.dataset + "\""
+	} else {
+		return "\"" + n.name + "(" + strconv.FormatInt(n.ID(), 10) + ")" + "\""
+	}
 }
 
 func (O *TableGraph) ToVisualizer(path string) {

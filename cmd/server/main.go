@@ -43,10 +43,10 @@ func main() {
 		log.Println("built joinability index")
 	*/
 	orgConf := &navigation.Config{
-		Gamma: 30, 
-		TerminationThreshold: 1e-15, 
-		TerminationWindow: 301, 
-		MaxIters: 750,
+		Gamma:                30,
+		TerminationThreshold: 1e-9, 
+		TerminationWindow:    301,
+		MaxIters:             750,
 	}
 
 	s, err := server.New(&server.Config{
