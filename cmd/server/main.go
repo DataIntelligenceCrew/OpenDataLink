@@ -35,13 +35,20 @@ func main() {
 	}
 	log.Println("built metadata embedding index")
 
-	joinabilityIndex, err := index.BuildJoinabilityIndex(db)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("built joinability index")
+	/*
+		joinabilityIndex, err := index.BuildJoinabilityIndex(db)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("built joinability index")
+	*/
 
-	orgConf := &navigation.Config{Gamma: 5, TerminationThreshold: 1e-15, TerminationWindow: 301, OperationThreshold: 1e-35}
+	orgConf := &navigation.Config{
+		Gamma:                5,
+		TerminationThreshold: 1e-15,
+		TerminationWindow:    301,
+		OperationThreshold:   1e-35,
+	}
 
 	s, err := server.New(&server.Config{
 		DevMode:              true,
@@ -49,13 +56,15 @@ func main() {
 		FastText:             ft,
 		MetadataIndex:        metadataIndex,
 		JoinabilityThreshold: joinabilityThreshold,
-		JoinabilityIndex:     joinabilityIndex,
+		JoinabilityIndex:     nil,
 		OrganizeConfig:       orgConf,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	s.Install()
+
+	log.Println("serving at http://localhost:8080")
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

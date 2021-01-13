@@ -27,7 +27,7 @@ func (O *TableGraph) labelNodes(db *database.DB, ft *fasttext.FastText) error {
 
 		var i int
 		for i = 0; i < 20; i++ {
-			if usedLabels[names[i]] {
+			if !usedLabels[names[i]] {
 				break
 			}
 		}
