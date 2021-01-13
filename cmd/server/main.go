@@ -42,7 +42,12 @@ func main() {
 		}
 		log.Println("built joinability index")
 	*/
-	orgConf := &navigation.Config{Gamma: 30, TerminationThreshold: 1e-15, TerminationWindow: 301, MaxIters: 750}
+	orgConf := &navigation.Config{
+		Gamma: 30, 
+		TerminationThreshold: 1e-15, 
+		TerminationWindow: 301, 
+		MaxIters: 750,
+	}
 
 	s, err := server.New(&server.Config{
 		DevMode:              true,
@@ -57,6 +62,8 @@ func main() {
 		log.Fatal(err)
 	}
 	s.Install()
+
+	log.Println("serving at http://localhost:8080")
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

@@ -800,7 +800,7 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 }
 
 func (n *Node) DOTID() string {
-	return "\"" + n.name + "\""
+	return "\"" + n.name + " - " + n.dataset + "\""
 }
 
 func (O *TableGraph) ToVisualizer(path string) {
