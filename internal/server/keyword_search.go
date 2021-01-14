@@ -1,6 +1,10 @@
 package server
 
 import (
+	"bytes"
+	"errors"
+	"os"
+	"os/exec"
 	"time"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
@@ -44,11 +48,31 @@ func (s *Server) keywordSearch(query string) ([]*database.Metadata, error) {
 	t := time.Now()
 	if err != nil {
 		return nil, err
-	} else {
-		s.organization.SetRootName(query)
-		println("Built organization for query '" + query + "' in " + t.Sub(start).String())
-		s.organization.ToVisualizer("/tmp/graph.dot")
 	}
+	println("Built organization for query '" + query + "' in " + t.Sub(start).String())
+	s.organization.SetRootName(query)
+	s.organization.ToVisualizer("graph.dot")
+
+	in, err := os.Open("graph.dot")
+	if err != nil {
+		return nil, err
+	}
+	var out bytes.Buffer
+
+	cmd := exec.Command("dot", "-Tsvg")
+	cmd.Stdin = in
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+	svg := out.Bytes()
+	i := bytes.Index(svg, []byte("<svg"))
+	if i < 0 {
+		return nil, errors.New("<svg not found")
+	}
+	svg = svg[i:]
+	s.organizationGraphSVG = svg
+
 	return results, nil
 }
 

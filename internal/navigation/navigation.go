@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
-	"math/rand"
-	"strconv"
+	//"strconv"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
@@ -14,6 +13,7 @@ import (
 	"github.com/ekzhu/go-fasttext"
 	"gonum.org/v1/gonum/blas/blas32"
 	"gonum.org/v1/gonum/graph"
+	"gonum.org/v1/gonum/graph/encoding"
 	"gonum.org/v1/gonum/graph/encoding/dot"
 	"gonum.org/v1/gonum/graph/path"
 	"gonum.org/v1/gonum/graph/simple"
@@ -484,6 +484,7 @@ func (n *Node) copy() *Node {
 
 // Wrapper around GoNum's implementation
 func (O *TableGraph) CopyOrganization() *TableGraph {
+	// FIXME: root is wrong
 	out := &TableGraph{simple.NewDirectedGraph(), O.config, O.root.(*Node).copy(), O.rootPaths, make([]*Node, 0)}
 
 	// Deep copy nodes
@@ -505,7 +506,8 @@ func (O *TableGraph) CopyOrganization() *TableGraph {
 }
 
 func (O *TableGraph) SetRootName(name string) {
-	O.GetRootNode().(*Node).name = name
+	// hack
+	O.Node(O.root.(*Node).id).(*Node).name = name
 }
 
 func (O *TableGraph) getSiblings(s graph.Node) []graph.Node {
@@ -806,14 +808,24 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 	return O, nil
 }
 
+/*
 func (n *Node) DOTID() string {
-	token := make([]byte, 2)
-	rand.Read(token)
 	if n.dataset != "" {
 		return "\"" + n.name + " - " + n.dataset + "\""
 	} else {
 		return "\"" + n.name + "(" + strconv.FormatInt(n.ID(), 10) + ")" + "\""
 	}
+}
+*/
+
+// Attributes for the DOT encoding.
+// Implements encoding.Attributer.
+func (n *Node) Attributes() []encoding.Attribute {
+	attrs := []encoding.Attribute{{Key: "label", Value: n.name}}
+	if n.dataset != "" {
+		attrs = append(attrs, encoding.Attribute{Key: "URL", Value: "/dataset/" + n.dataset})
+	}
+	return attrs
 }
 
 func (O *TableGraph) ToVisualizer(path string) {

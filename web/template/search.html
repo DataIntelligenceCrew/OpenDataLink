@@ -1,8 +1,9 @@
 {{define "content"}}
-<div>
   <h2>Results for "{{.Query}}"</h2>
-  <p class="right"><a href="/navigation/" target="_blank">Navigate</a></p>
-</div>
+  <ul>
+    <li><a href="/navigation/" target="_blank">Navigate</a></li>
+    <li><a href="/navigation-graph">View navigation graph</a></li>
+  </ul>
 
   {{with .Results}}
     <p>{{len .}} results</p>

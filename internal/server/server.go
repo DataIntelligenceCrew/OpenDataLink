@@ -33,6 +33,7 @@ type Server struct {
 	templates            map[string]*template.Template
 	organization         *nav.TableGraph
 	organizationConfig   *nav.Config
+	organizationGraphSVG []byte
 	parser               *wordparser.WordParser
 }
 
@@ -80,6 +81,7 @@ func (s *Server) Install() {
 	http.HandleFunc("/navigation/get-root", s.handleNavGetRoot)
 	http.HandleFunc("/navigation/get-word/", s.handleNavGetWord)
 	http.HandleFunc("/navigation/get-node/", s.handleNavGetNode)
+	http.HandleFunc("/navigation-graph", s.handleNavGraph)
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 }
@@ -159,6 +161,13 @@ func (s *Server) handleNav(w http.ResponseWriter, req *http.Request) {
 		PageTitle string
 		Node      *nav.ServeableNode
 	}{"Navigation", nav.ToServeableNode(s.organization, s.organization.Node(nodeID))})
+}
+
+func (s *Server) handleNavGraph(w http.ResponseWriter, req *http.Request) {
+	s.servePage(w, "navigation-graph", &struct {
+		PageTitle string
+		SVG       template.HTML
+	}{"Navigation Graph", template.HTML(s.organizationGraphSVG)})
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, req *http.Request) {
@@ -353,6 +362,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		"joinable-columns",
 		"unionable-tables",
 		"nav",
+		"navigation-graph",
 	}
 	templates := make(map[string]*template.Template)
 

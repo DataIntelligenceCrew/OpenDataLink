@@ -38,7 +38,6 @@ func (O *TableGraph) labelNodes(db *database.DB, ft *fasttext.FastText) error {
 		}
 
 		usedLabels[strings.ToLower(label)] = true
-		println(i, label)
 
 		node.name = label
 
