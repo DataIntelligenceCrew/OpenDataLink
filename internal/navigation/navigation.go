@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+
 	//"strconv"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
@@ -29,6 +30,7 @@ type Config struct {
 
 const embeddingDim = 300
 
+// There are likely optimizations to be made by changing id, name, and dataset into pointers to values so that we don't have to malloc new variables each time we copy nodes
 // Node a dataset specific node
 type Node struct {
 	id                 int64

@@ -45,7 +45,7 @@ func main() {
 		Gamma:                30,
 		TerminationThreshold: 1e-9,
 		TerminationWindow:    301,
-		MaxIters:             750,
+		MaxIters:             1e6,
 	}
 
 	s, err := server.New(&server.Config{
