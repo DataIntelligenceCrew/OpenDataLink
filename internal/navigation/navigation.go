@@ -12,6 +12,7 @@ import (
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
 	"github.com/DataIntelligenceCrew/go-faiss"
 	"github.com/ekzhu/go-fasttext"
+	"gonum.org/v1/gonum/blas/blas32"
 	"gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/encoding/dot"
 	"gonum.org/v1/gonum/graph/path"
@@ -349,9 +350,13 @@ func ToDSNode(s graph.Node) *Node {
 	return nil
 }
 
+func blasDot(a, b []float32) float32 {
+	return blas32.Dot(blas32.Vector{Inc: 1, Data: a}, blas32.Vector{Inc: 1, Data: b})
+}
+
 // $\kappa$ from the paper. Simply the Cosine Similarity
 func similarity(a []float32, b []float32) float32 { // TODO: Is something like this already in FAISS?
-	aDotB := vec32.Dot(a, b)
+	aDotB := blasDot(a, b)
 	normAB := float32(1) // vec32.Norm(a) * vec32.Norm(b) // We don't need this code because the vectors are already normalized
 
 	return (aDotB / normAB)
@@ -787,7 +792,7 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 				s := pq[lvl].Pop().(*Node)
 				var Op = O.chooseApplyOperation(s, lvl)
 				O, p = O.accept(Op)
-				t.updateWindow(O.getOrganizationEffectiveness(), int(s.ID()))
+				t.updateWindow(p, int(s.ID()))
 			}
 			pq = O.buildPriorityQueue()
 			if O.terminate(t, p) {
