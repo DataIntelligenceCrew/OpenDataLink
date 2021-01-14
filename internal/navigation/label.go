@@ -1,6 +1,8 @@
 package navigation
 
 import (
+	"strings"
+
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	indexpkg "github.com/DataIntelligenceCrew/OpenDataLink/internal/index"
 	"github.com/ekzhu/go-fasttext"
@@ -24,7 +26,7 @@ func (O *TableGraph) labelNodes(db *database.DB, ft *fasttext.FastText) error {
 
 		var i int
 		for i = 0; i < 20; i++ {
-			if !usedLabels[names[i]] {
+			if !usedLabels[strings.ToLower(names[i])] {
 				break
 			}
 		}
@@ -35,7 +37,7 @@ func (O *TableGraph) labelNodes(db *database.DB, ft *fasttext.FastText) error {
 			label = names[i]
 		}
 
-		usedLabels[label] = true
+		usedLabels[strings.ToLower(label)] = true
 		println(i, label)
 
 		node.name = label

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/navigation"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/wordemb"
@@ -37,11 +39,14 @@ func (s *Server) keywordSearch(query string) ([]*database.Metadata, error) {
 		results = append(results, meta)
 		datasetIDs = append(datasetIDs, meta.DatasetID)
 	}
+	start := time.Now()
 	s.organization, err = navigation.BuildOrganization(s.db, s.ft, s.organizationConfig, datasetIDs)
+	t := time.Now()
 	if err != nil {
 		return nil, err
 	} else {
 		s.organization.SetRootName(query)
+		println("Built organization for query '" + query + "' in " + t.Sub(start).String())
 		s.organization.ToVisualizer("/tmp/graph.dot")
 	}
 	return results, nil
