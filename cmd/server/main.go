@@ -2,8 +2,10 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/config"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
@@ -14,12 +16,24 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+var orgGamma = flag.String("orggamma", "", "Gamma to use for organization generation")
+
+const DEFAULT_GAMMA float64 = 30
+
 const (
 	// Containment threshold for joinability index
 	joinabilityThreshold = 0.5
 )
 
 func main() {
+	flag.Parse()
+	var gamma = DEFAULT_GAMMA
+	if *orgGamma != "" {
+		tmp, err := strconv.Atoi(*orgGamma)
+		if err == nil {
+			gamma = float64(tmp)
+		}
+	}
 	db, err := database.New(config.DatabasePath())
 	if err != nil {
 		log.Fatal(err)
@@ -42,7 +56,7 @@ func main() {
 	log.Println("built joinability index")
 
 	orgConf := &navigation.Config{
-		Gamma:                30,
+		Gamma:                gamma,
 		TerminationThreshold: 1e-9,
 		TerminationWindow:    301,
 		MaxIters:             1e6,

@@ -208,7 +208,7 @@ func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {
 
 func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 	query := req.FormValue("q")
-
+	s.organization = nil
 	results, err := s.keywordSearch(query)
 	if err != nil {
 		serverError(w, err)

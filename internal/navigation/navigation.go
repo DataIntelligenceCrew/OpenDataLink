@@ -776,7 +776,6 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 
 	var p = O.getOrganizationEffectiveness()
 	for i := 0; i < 2; i++ {
-		fmt.Println(t.window)
 		for level := range pq {
 			lvl := level
 			for pq[lvl].HasNext() {
