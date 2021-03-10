@@ -17,8 +17,10 @@ import (
 )
 
 var orgGamma = flag.String("orggamma", "", "Gamma to use for organization generation")
+var orgWindow = flag.String("orgwin", "", "Termination Window size for organization generation")
 
 const DEFAULT_GAMMA float64 = 30
+const DEFAULT_WINDOW int = 701
 
 const (
 	// Containment threshold for joinability index
@@ -32,6 +34,15 @@ func main() {
 		tmp, err := strconv.Atoi(*orgGamma)
 		if err == nil {
 			gamma = float64(tmp)
+			log.Println(gamma)
+		}
+	}
+	var window = DEFAULT_WINDOW
+	if *orgWindow != "" {
+		tmp, err := strconv.Atoi(*orgWindow)
+		if err == nil {
+			window = int(tmp)
+			log.Println(window)
 		}
 	}
 	db, err := database.New(config.DatabasePath())
@@ -58,7 +69,7 @@ func main() {
 	orgConf := &navigation.Config{
 		Gamma:                gamma,
 		TerminationThreshold: 1e-9,
-		TerminationWindow:    301,
+		TerminationWindow:    window,
 		MaxIters:             1e6,
 	}
 
