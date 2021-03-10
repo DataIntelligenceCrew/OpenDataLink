@@ -630,20 +630,20 @@ func (O *TableGraph) applyDelOperation(s graph.Node, lvl int) *TableGraph {
 
 // TODO: Make this more intelligent.
 func (O *TableGraph) chooseApplyOperation(s graph.Node, level int) *TableGraph {
-	opAdd := O.CopyOrganization()
+	// opAdd := O.CopyOrganization()
 	opDel := O.CopyOrganization()
 
-	pq := opAdd.buildPriorityQueue()
+	// pq := opAdd.buildPriorityQueue()
 
-	if level >= 1 && len(pq[level-1]) >= 2 {
-		opAdd.addParent(s.ID(), &pq[level-1])
-	}
+	// if level >= 1 && len(pq[level-1]) >= 2 {
+	// 	opAdd.addParent(s.ID(), &pq[level-1])
+	// }
 	opDel.deleteParent(s.ID())
-	if opAdd.getOrganizationEffectiveness() > opDel.getOrganizationEffectiveness() {
-		return opAdd
-	} else {
-		return opDel
-	}
+	// if opAdd.getOrganizationEffectiveness() > opDel.getOrganizationEffectiveness() {
+	// 	return opAdd
+	// } else {
+	return opDel
+	// }
 }
 
 func (O *TableGraph) chooseOperableState(pq *ReachabilityPriorityQueue, t *terminationMonitor) graph.Node {
@@ -712,10 +712,10 @@ func (O *TableGraph) terminate(t *terminationMonitor, pp float64) bool {
 func (O *TableGraph) accept(Op *TableGraph) (*TableGraph, float64) {
 	var Pp = Op.getOrganizationEffectiveness()
 	var p = O.getOrganizationEffectiveness()
-	// fmt.Printf("p: %v\n", p)
-	// fmt.Printf("Pp: %v\n", Pp)
-	// fmt.Printf("Delta Reachability: %v\n", p-Pp)
-	if Pp > p {
+	if Pp >= p {
+		fmt.Printf("p: %v\n", p)
+		fmt.Printf("Pp: %v\n", Pp)
+		fmt.Printf("Delta Reachability: %v\n", p-Pp)
 		return Op, Pp
 	}
 	return O, p
