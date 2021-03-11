@@ -829,8 +829,12 @@ func (n *Node) Attributes() []encoding.Attribute {
 	return attrs
 }
 
+func (O *TableGraph) MarshalDOT() ([]byte, error) {
+	return dot.Marshal(O, "Organization", "", "")
+}
+
 func (O *TableGraph) ToVisualizer(path string) {
-	data, err := dot.Marshal(O, "Organization", "", "")
+	data, err := O.MarshalDOT()
 	if err != nil {
 		fmt.Println(err)
 	}

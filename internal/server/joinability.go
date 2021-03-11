@@ -45,5 +45,20 @@ func (s *Server) joinableColumns(query *database.ColumnSketch) ([]*joinabilityRe
 		return results[i].Containment > results[j].Containment
 	})
 
+	orgDatasetIDs := make([]string, 0, 50)
+
+	for i, res := range results {
+		if i > 50 {
+			break
+		}
+		orgDatasetIDs = append(orgDatasetIDs, res.DatasetID)
+	}
+	name, err := s.db.DatasetName(query.DatasetID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.buildOrganization(name, orgDatasetIDs); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
