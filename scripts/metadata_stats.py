@@ -37,10 +37,10 @@ if __name__ == '__main__':
     print(f"Number of columns: {num_columns:,}")
 
     cur.execute("SELECT categories FROM metadata")
-    ncat = 0
+    categories = set()
     for row in cur.fetchall():
-        ncat += len(row[0].split(','))
-    print(f"Total number of categories: {ncat:,}")
+        categories |= set(row[0].split(','))
+    print(f"Total number of categories: {len(categories):,}")
 
     cur.execute("SELECT count(*) FROM metadata WHERE description <> ''")
     num_desc = cur.fetchone()[0]
