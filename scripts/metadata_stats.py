@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
+
 import sqlite3
 import matplotlib.pyplot as plt
 
 
-def plot(db):
+def plot_tag_count(db, outfile):
     cur = db.cursor()
     cur.execute("SELECT name, description, attribution, categories, tags "
                 "FROM metadata")
@@ -19,7 +21,7 @@ def plot(db):
 
     fig, ax = plt.subplots()
     ax.hist(freqs, bins=75)
-    plt.savefig('metadata.png')
+    plt.savefig(outfile)
 
 
 if __name__ == '__main__':
@@ -27,20 +29,24 @@ if __name__ == '__main__':
     cur = db.cursor()
 
     cur.execute("SELECT count(*) FROM metadata")
-    total_datasets = cur.fetchone()[0]
-    print(f"Number of datasets: {total_datasets}")
+    num_datasets = cur.fetchone()[0]
+    print(f"Number of datasets: {num_datasets:,}")
+
+    cur.execute("SELECT count(*) FROM column_sketches")
+    num_columns = cur.fetchone()[0]
+    print(f"Number of columns: {num_columns:,}")
 
     cur.execute("SELECT categories FROM metadata")
     ncat = 0
     for row in cur.fetchall():
         ncat += len(row[0].split(','))
-    print(f"Total number of categories: {ncat}")
+    print(f"Total number of categories: {ncat:,}")
 
     cur.execute("SELECT count(*) FROM metadata WHERE description <> ''")
     num_desc = cur.fetchone()[0]
-    percent_desc = num_desc / total_datasets * 100
-    print(f"Datasets with description: {num_desc} ({percent_desc:.4}%)")
+    percent_desc = num_desc / num_datasets * 100
+    print(f"Datasets with description: {num_desc:,} ({percent_desc:.4}%)")
 
-    plot(db)
+    plot_tag_count(db, 'tagcount.png')
 
     db.close()
