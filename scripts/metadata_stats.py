@@ -4,23 +4,37 @@ import sqlite3
 import matplotlib.pyplot as plt
 
 
-def plot_tag_count(db, outfile):
+def plot_tag_counts(db, outfile):
     cur = db.cursor()
-    cur.execute("SELECT name, description, attribution, categories, tags "
-                "FROM metadata")
+    cur.execute("SELECT categories, tags FROM metadata")
 
-    freqs = []
+    counts = []
     for row in cur.fetchall():
-        score = 0
-        for f in row[:3]:
-            if f:
-                score += 1
-        score += len(row[3].split(','))
-        score += len(row[4].split(','))
-        freqs.append(score)
+        cnt = 0
+        for col in row:
+            if col:
+                cnt += len(col.split(','))
+        counts.append(cnt)
+
+    bars = [(None, 0), (None, 1), (None, 2), (None, 3), (None, 4), (None, 5),
+            (None, 6), (None, 7), (None, 8), (None, 9), (None, 10), (10, None)]
+    names = []
+    values = []
+    for b in bars:
+        if not b[0]:
+            names.append(str(b[1]))
+            values.append(len([c for c in counts if c == b[1]]))
+        elif not b[1]:
+            names.append(f">{b[0]}")
+            values.append(len([c for c in counts if c > b[0]]))
+        else:
+            names.append(f"{b[0]}-{b[1]}")
+            values.append(len([c for c in counts if c >= b[0] and c <= b[1]]))
 
     fig, ax = plt.subplots()
-    ax.hist(freqs, bins=75)
+    ax.bar(names, values)
+    plt.xlabel('Number of tags and categories')
+    plt.ylabel('Number of datasets')
     plt.savefig(outfile)
 
 
@@ -47,6 +61,6 @@ if __name__ == '__main__':
     percent_desc = num_desc / num_datasets * 100
     print(f"Datasets with description: {num_desc:,} ({percent_desc:.4}%)")
 
-    plot_tag_count(db, 'tagcount.png')
+    plot_tag_counts(db, 'tagcounts.png')
 
     db.close()
