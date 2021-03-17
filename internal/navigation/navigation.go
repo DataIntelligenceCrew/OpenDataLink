@@ -713,9 +713,9 @@ func (O *TableGraph) accept(Op *TableGraph) (*TableGraph, float64) {
 	var Pp = Op.getOrganizationEffectiveness()
 	var p = O.getOrganizationEffectiveness()
 	if Pp >= p {
-		fmt.Printf("p: %v\n", p)
-		fmt.Printf("Pp: %v\n", Pp)
-		fmt.Printf("Delta Reachability: %v\n", p-Pp)
+		// fmt.Printf("p: %v\n", p)
+		// fmt.Printf("Pp: %v\n", Pp)
+		// fmt.Printf("Delta Reachability: %v\n", p-Pp)
 		return Op, Pp
 	}
 	return O, p
@@ -749,7 +749,7 @@ func (pq *ReachabilityPriorityQueue) HasNext() bool {
 }
 
 func (O *TableGraph) buildPriorityQueue() []ReachabilityPriorityQueue {
-	var out = make([]ReachabilityPriorityQueue, 100)
+	var out = make([]ReachabilityPriorityQueue, 200)
 
 	for it := O.Nodes(); it.Next(); {
 		if it.Node().ID() != O.root.ID() { // We don't want the root node in the priority queue, since we can't operate on it
