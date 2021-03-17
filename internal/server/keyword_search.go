@@ -1,14 +1,7 @@
 package server
 
 import (
-	"bytes"
-	"errors"
-	"os"
-	"os/exec"
-	"time"
-
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
-	"github.com/DataIntelligenceCrew/OpenDataLink/internal/navigation"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/wordemb"
 )
 
@@ -32,7 +25,6 @@ func (s *Server) keywordSearch(query string) ([]*database.Metadata, error) {
 	if err != nil {
 		return nil, err
 	}
-	datasetIDs := make([]string, 0)
 	var results []*database.Metadata
 
 	for _, id := range ids {
@@ -41,38 +33,11 @@ func (s *Server) keywordSearch(query string) ([]*database.Metadata, error) {
 			return nil, err
 		}
 		results = append(results, meta)
-		datasetIDs = append(datasetIDs, meta.DatasetID)
 	}
-	start := time.Now()
-	s.organization, err = navigation.BuildOrganization(s.db, s.ft, s.organizationConfig, datasetIDs)
-	t := time.Now()
-	if err != nil {
+
+	if err := s.buildOrganization(query, ids); err != nil {
 		return nil, err
 	}
-	println("Built organization for query '" + query + "' in " + t.Sub(start).String())
-	s.organization.SetRootName(query)
-	s.organization.ToVisualizer("graph.dot")
-
-	in, err := os.Open("graph.dot")
-	if err != nil {
-		return nil, err
-	}
-	var out bytes.Buffer
-
-	cmd := exec.Command("dot", "-Tsvg")
-	cmd.Stdin = in
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-	svg := out.Bytes()
-	i := bytes.Index(svg, []byte("<svg"))
-	if i < 0 {
-		return nil, errors.New("<svg not found")
-	}
-	svg = svg[i:]
-	s.organizationGraphSVG = svg
-
 	return results, nil
 }
 
