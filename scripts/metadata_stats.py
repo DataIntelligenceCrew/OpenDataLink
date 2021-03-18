@@ -16,8 +16,8 @@ def plot_tag_counts(db, outfile):
                 cnt += len(col.split(','))
         counts.append(cnt)
 
-    bars = [(None, 0), (None, 1), (None, 2), (None, 3), (None, 4), (None, 5),
-            (None, 6), (None, 7), (None, 8), (None, 9), (None, 10), (10, None)]
+    bars = [(None, 1), (None, 2), (None, 3), (None, 4), (None, 5), (None, 6),
+            (None, 7), (None, 8), (None, 9), (None, 10), (10, None)]
     names = []
     values = []
     for b in bars:
@@ -38,28 +38,56 @@ def plot_tag_counts(db, outfile):
     plt.savefig(outfile)
 
 
+def query_val(db, s):
+    return db.execute(s).fetchone()[0]
+
+
 if __name__ == '__main__':
     db = sqlite3.connect('opendatalink.sqlite')
-    cur = db.cursor()
 
-    cur.execute("SELECT count(*) FROM metadata")
-    num_datasets = cur.fetchone()[0]
-    print(f"Number of datasets: {num_datasets:,}")
+    print("Data:")
 
-    cur.execute("SELECT count(*) FROM column_sketches")
-    num_columns = cur.fetchone()[0]
-    print(f"Number of columns: {num_columns:,}")
+    n = query_val(db, "SELECT count(DISTINCT dataset_id) FROM column_sketches")
+    print(f"Number of datasets: {n:,}")
 
-    cur.execute("SELECT categories FROM metadata")
+    n = query_val(db, "SELECT count(*) FROM column_sketches")
+    print(f"Number of columns: {n:,}")
+
+    print()
+    print("Metadata:")
+
+    num_meta = query_val(db, "SELECT count(*) FROM metadata")
+    print(f"Number of metadata records: {num_meta:,}")
+
+    n = query_val(db, "SELECT count(*) FROM metadata WHERE name <> ''")
+    percent = n / num_meta * 100
+    print(f"Datasets with name: {n:,} ({percent:.4}%)")
+
+    n = query_val(db, "SELECT count(*) FROM metadata WHERE description <> ''")
+    percent = n / num_meta * 100
+    print(f"Datasets with description: {n:,} ({percent:.4}%)")
+
+    n = query_val(db, "SELECT count(*) FROM metadata WHERE attribution <> ''")
+    percent = n / num_meta * 100
+    print(f"Datasets with attribution: {n:,} ({percent:.4}%)")
+
+    n = query_val(db, "SELECT count(*) FROM metadata WHERE categories <> ''")
+    percent = n / num_meta * 100
+    print(f"Datasets with categories: {n:,} ({percent:.4}%)")
+
+    n = query_val(db, "SELECT count(*) FROM metadata WHERE tags <> ''")
+    percent = n / num_meta * 100
+    print(f"Datasets with tags: {n:,} ({percent:.4}%)")
+
+    n = query_val(db, "SELECT count(*) FROM metadata "
+                      "WHERE categories <> '' OR tags <> ''")
+    percent = n / num_meta * 100
+    print(f"Datasets with categories or tags: {n:,} ({percent:.4}%)")
+
     categories = set()
-    for row in cur.fetchall():
+    for row in db.execute("SELECT categories FROM metadata"):
         categories |= set(row[0].split(','))
     print(f"Total number of categories: {len(categories):,}")
-
-    cur.execute("SELECT count(*) FROM metadata WHERE description <> ''")
-    num_desc = cur.fetchone()[0]
-    percent_desc = num_desc / num_datasets * 100
-    print(f"Datasets with description: {num_desc:,} ({percent_desc:.4}%)")
 
     plot_tag_counts(db, 'tagcounts.png')
 
