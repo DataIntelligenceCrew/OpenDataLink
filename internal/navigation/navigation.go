@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"strconv"
 
 	//"strconv"
 
@@ -30,6 +31,28 @@ type Config struct {
 
 const embeddingDim = 300
 
+type Edge struct {
+	from graph.Node
+	to   graph.Node
+	hide bool
+}
+
+func (e *Edge) From() graph.Node {
+	return e.from
+}
+
+func (e *Edge) To() graph.Node {
+	return e.to
+}
+
+func (e *Edge) ReversedEdge() graph.Edge {
+	return &Edge{from: e.to, to: e.from, hide: e.hide}
+}
+
+func NewEdge(from graph.Node, to graph.Node) *Edge {
+	return &Edge{from: from, to: to, hide: false}
+}
+
 // There are likely optimizations to be made by changing id, name, and dataset into pointers to values so that we don't have to malloc new variables each time we copy nodes
 // Node a dataset specific node
 type Node struct {
@@ -38,6 +61,7 @@ type Node struct {
 	vector             []float32       // Metadata embedding vector for the datasets
 	datasets           map[string]bool // Set of dataset IDs of children
 	name               string
+	leafChildren       bool
 	dataset            string
 }
 
@@ -55,6 +79,7 @@ func newDatasetNode(id int64, vector []float32, datasetID string) *Node {
 		vector:             vector,
 		cachedReachibility: 0,
 		name:               datasetID,
+		leafChildren:       false,
 		dataset:            datasetID,
 		datasets:           map[string]bool{datasetID: true},
 	}
@@ -73,7 +98,7 @@ func newMergedNode(id int64, a, b *Node) *Node {
 			datasets[k] = v
 		}
 	}
-	return &Node{id, 0, vec, datasets, "", ""}
+	return &Node{id, 0, vec, datasets, "", false, ""}
 }
 
 // TableGraph the custom graph structure for an organization
@@ -123,8 +148,19 @@ func (O *TableGraph) addMergedNode(a, b *Node) *Node {
 	id := O.NewNode().ID()
 	node := newMergedNode(id, a, b)
 	O.AddNode(node)
-	O.SetEdge(O.NewEdge(node, a))
-	O.SetEdge(O.NewEdge(node, b))
+	var aEdge, bEdge *Edge
+	if a.dataset != "" {
+		aEdge = &Edge{node, a, true}
+	} else {
+		aEdge = NewEdge(node, a)
+	}
+	if b.dataset != "" {
+		bEdge = &Edge{node, b, true}
+	} else {
+		bEdge = NewEdge(node, b)
+	}
+	O.SetEdge(aEdge)
+	O.SetEdge(bEdge)
 	return node
 }
 
@@ -502,7 +538,7 @@ func (O *TableGraph) CopyOrganization() *TableGraph {
 	for it := O.Edges(); it.Next(); {
 		from := it.Edge().From().ID()
 		to := it.Edge().To().ID()
-		out.SetEdge(out.NewEdge(out.Node(from), out.Node(to)))
+		out.SetEdge(&Edge{out.Node(from), out.Node(to), it.Edge().(*Edge).hide})
 	}
 	return out
 }
@@ -557,45 +593,54 @@ func (O *TableGraph) update_vector(s *Node) []float32 {
 
 func (O *TableGraph) deleteParent(s int64) ([]graph.Node, error) {
 	node := O.Node(s)
-	parents := O.getParents(node) // Get the parents of the input node
-	reachability := math.Inf(1)
-	var lowestNode graph.Node // Find the least reachable parent
+	if node != nil {
+		parents := O.getParents(node) // Get the parents of the input node
+		reachability := math.Inf(1)
+		var lowestNode graph.Node // Find the least reachable parent
 
-	for parents.Next() {
-		var nodeReach = O.getStateReachabilityProbability(parents.Node())
-		if nodeReach < reachability {
-			reachability = nodeReach
-			lowestNode = parents.Node()
+		for parents.Next() {
+			var nodeReach = O.getStateReachabilityProbability(parents.Node())
+			if nodeReach < reachability {
+				reachability = nodeReach
+				lowestNode = parents.Node()
+			}
 		}
-	}
 
-	if lowestNode == nil {
-		return nil, nil
-	}
-
-	var removedNodes []graph.Node
-
-	for _, s := range O.getSiblings(lowestNode) {
-		if !O.isLeafNode(s) {
-			O.eliminateNode(s)
-			removedNodes = append(removedNodes, s)
+		if lowestNode == nil {
+			return nil, nil
 		}
+
+		var removedNodes []graph.Node
+
+		for _, s := range O.getSiblings(lowestNode) {
+			if !O.isLeafNode(s) {
+				O.eliminateNode(s)
+				removedNodes = append(removedNodes, s)
+			}
+		}
+
+		O.eliminateNode(lowestNode)
+		removedNodes = append(removedNodes, lowestNode)
+
+		O.update_vector(O.root.(*Node))
+		// fmt.Printf("Del Parent Effectiveness: %v\n", O.getOrganizationEffectiveness())
+		// O.toVisualizer("/tmp/last_del_op.dot")
+
+		return removedNodes, nil
 	}
-
-	O.eliminateNode(lowestNode)
-	removedNodes = append(removedNodes, lowestNode)
-
-	O.update_vector(O.root.(*Node))
-	// fmt.Printf("Del Parent Effectiveness: %v\n", O.getOrganizationEffectiveness())
-	// O.toVisualizer("/tmp/last_del_op.dot")
-
-	return removedNodes, nil
+	return nil, nil
 }
 
 func (O *TableGraph) addEdge(from graph.Node, to graph.Node) bool {
 	if !O.isLeafNode(from) && !O.HasEdgeFromTo(from.ID(), to.ID()) {
 		// vec32.Scale(from.(*Node).vector, float32(O.getChildren(from).Len()))
-		O.SetEdge(O.NewEdge(from, to))
+		var e *Edge
+		if O.isLeafNode(to) {
+			e = &Edge{from, to, true}
+		} else {
+			e = NewEdge(from, to)
+		}
+		O.SetEdge(e)
 		// vec32.Add(from.(*Node).vector, to.(*Node).vector)
 		// vec32.Scale(from.(*Node).vector, 1/float32(O.getChildren(from).Len()))
 		// vec32.Normalize(from.(*Node).vector)
@@ -818,14 +863,28 @@ func (n *Node) DOTID() string {
 	}
 }
 */
+func (e *Edge) Attributes() []encoding.Attribute {
+	attrs := []encoding.Attribute{}
+	// log.Printf("Edge\n")
+	if e.hide {
+		attrs = append(attrs, encoding.Attribute{Key: "style", Value: "invis"})
+	}
+	return attrs
+}
 
 // Attributes for the DOT encoding.
-// Implements encoding.Attributer.
 func (n *Node) Attributes() []encoding.Attribute {
-	attrs := []encoding.Attribute{{Key: "label", Value: n.name}}
-	if n.dataset != "" {
+	attrs := []encoding.Attribute{}
+	if n.leafChildren { // If a node has children that are leaf nodes we add an indication for the user
+		attrs = append(attrs, encoding.Attribute{Key: "label", Value: "" + n.name + "\n(View Datasets)"})
+		attrs = append(attrs, encoding.Attribute{Key: "URL", Value: "/navigation/" + strconv.FormatInt(n.id, 10)})
+	} else if n.dataset != "" { // If the node is a leaf node then we hide it
 		attrs = append(attrs, encoding.Attribute{Key: "URL", Value: "/dataset/" + n.dataset})
+		attrs = append(attrs, encoding.Attribute{Key: "style", Value: "invis"})
+	} else { // Otherwise we just set the label equal to the node's name
+		attrs = append(attrs, encoding.Attribute{Key: "label", Value: n.name})
 	}
+
 	return attrs
 }
 
