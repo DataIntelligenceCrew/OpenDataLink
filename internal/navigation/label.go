@@ -48,9 +48,6 @@ func (O *TableGraph) labelNodes(db *database.DB, ft *fasttext.FastText) error {
 					return err
 				}
 			} else if O.isLeafNode(child) {
-				for jt := O.getParents(child); jt.Next(); {
-					jt.Node().(*Node).leafChildren = true
-				}
 				var name string
 				row := db.QueryRow("SELECT name FROM metadata WHERE dataset_id='" + child.name + "';")
 				err := row.Scan(&name)
