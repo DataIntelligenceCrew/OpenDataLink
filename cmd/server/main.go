@@ -19,8 +19,8 @@ import (
 var orgGamma = flag.String("orggamma", "", "Gamma to use for organization generation")
 var orgWindow = flag.String("orgwin", "", "Termination Window size for organization generation")
 
-const DEFAULT_GAMMA float64 = 30
-const DEFAULT_WINDOW int = 701
+const DEFAULT_GAMMA float64 = 1
+const DEFAULT_WINDOW int = 1001
 
 const (
 	// Containment threshold for joinability index
@@ -89,5 +89,5 @@ func main() {
 
 	log.Println("serving at http://localhost:8080")
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":3140", nil))
 }

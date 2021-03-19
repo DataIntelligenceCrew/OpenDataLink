@@ -59,8 +59,8 @@ func main() {
 	orgConf := &navigation.Config{
 		Gamma:                30,
 		TerminationThreshold: 1e-9,
-		TerminationWindow:    301,
-		MaxIters:             750,
+		TerminationWindow:    1000,
+		MaxIters:             1750,
 	}
 
 	s, err := server.New(&server.Config{
