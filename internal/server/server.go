@@ -78,9 +78,9 @@ func (s *Server) Install() {
 	http.HandleFunc("/joinable-columns", s.handleJoinableColumns)
 	http.HandleFunc("/unionable-tables", s.handleUnionableTables)
 	http.HandleFunc("/navigation/", s.handleNav)
-	http.HandleFunc("/navigation/get-root", s.handleNavGetRoot)
-	http.HandleFunc("/navigation/get-word/", s.handleNavGetWord)
-	http.HandleFunc("/navigation/get-node/", s.handleNavGetNode)
+	//http.HandleFunc("/navigation/get-root", s.handleNavGetRoot)
+	//http.HandleFunc("/navigation/get-word/", s.handleNavGetWord)
+	//http.HandleFunc("/navigation/get-node/", s.handleNavGetNode)
 	http.HandleFunc("/navigation-graph", s.handleNavGraph)
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
@@ -347,6 +347,8 @@ func (s *Server) servePage(w http.ResponseWriter, page string, data interface{})
 		serverError(w, fmt.Errorf("servePage: no such page: %s", page))
 		return
 	}
+	// Suppress clickjacking warnings
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	// TODO: Write to a temporary buffer
 	if err := tmpl.Execute(w, data); err != nil {
 		serverError(w, err)
