@@ -3,7 +3,7 @@ module github.com/DataIntelligenceCrew/OpenDataLink
 go 1.14
 
 require (
-	github.com/DataIntelligenceCrew/go-faiss v0.0.0-20201109191312-0718ed7e292c
+	github.com/DataIntelligenceCrew/go-faiss v0.1.0
 	github.com/axiomhq/hyperloglog v0.0.0-20191112132149-a4c4c47bc57f
 	github.com/dgryski/go-minhash v0.0.0-20190315135803-ad340ca03076 // indirect
 	github.com/dgryski/go-spooky v0.0.0-20170606183049-ed3d087f40e2 // indirect

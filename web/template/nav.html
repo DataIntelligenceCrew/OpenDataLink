@@ -1,0 +1,31 @@
+{{define "content"}}
+    {{with .Node}}
+        <h2>{{.NodeName}}</h2>
+        {{if .ChildIDs}}
+        <h3>Subcategories</h3>
+        <ul>
+            {{range .ChildIDs}}
+                <li>
+                    {{if .Dataset}}
+                        <a href="/navigation/{{.ID}}">Dataset: {{.Name}}</a>
+                    {{else}}
+                        <a href="/navigation/{{.ID}}">{{.Name}}</a>
+                    {{end}}
+                </li>
+            {{end}}
+        </ul>
+        {{else}}
+        <p><a href="/dataset/{{.Dataset}}" target="_blank">Dataset Page</a></p>
+        {{end}}
+        {{if .ParentIDs}}
+        <h3>Supercategories</h3>
+        <ul>
+            {{range .ParentIDs}}
+                <li><a href="/navigation/{{.ID}}">{{.Name}}</a></li>
+            {{end}}
+        </ul>
+        {{end}}
+    {{else}}
+        <p>Node not found</p>
+    {{end}}
+{{end}}

@@ -34,6 +34,10 @@ func (s *Server) keywordSearch(query string) ([]*database.Metadata, error) {
 		}
 		results = append(results, meta)
 	}
+
+	if err := s.buildOrganization(query, ids); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 

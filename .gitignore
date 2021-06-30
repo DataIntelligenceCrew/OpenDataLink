@@ -8,3 +8,9 @@ fasttext.sqlite
 /process_metadata
 /server
 /sketch_columns
+.vscode/*
+**/*.dot
+**/*.pdf
+**/*.prof 
+graph.dot
+profile

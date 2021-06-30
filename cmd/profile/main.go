@@ -1,3 +1,4 @@
+// Serves the OpenDataLink frontend with CPU profiling enabled
 // Command server serves the Open Data Link frontend.
 package main
 
@@ -5,7 +6,9 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"strconv"
+	_ "net/http/pprof"
+	"os"
+	"runtime/pprof"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/config"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
@@ -16,34 +19,21 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var orgGamma = flag.String("orggamma", "", "Gamma to use for organization generation")
-var orgWindow = flag.String("orgwin", "", "Termination Window size for organization generation")
-
-const DEFAULT_GAMMA float64 = 1
-const DEFAULT_WINDOW int = 1001
-
 const (
 	// Containment threshold for joinability index
 	joinabilityThreshold = 0.5
 )
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
 func main() {
 	flag.Parse()
-	var gamma = DEFAULT_GAMMA
-	if *orgGamma != "" {
-		tmp, err := strconv.Atoi(*orgGamma)
-		if err == nil {
-			gamma = float64(tmp)
-			log.Println(gamma)
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
 		}
-	}
-	var window = DEFAULT_WINDOW
-	if *orgWindow != "" {
-		tmp, err := strconv.Atoi(*orgWindow)
-		if err == nil {
-			window = int(tmp)
-			log.Println(window)
-		}
+		pprof.StartCPUProfile(f)
 	}
 	db, err := database.New(config.DatabasePath())
 	if err != nil {
@@ -59,18 +49,18 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("built metadata embedding index")
-
 	joinabilityIndex, err := index.BuildJoinabilityIndex(db)
+
+	pprof.StopCPUProfile()
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("built joinability index")
-
 	orgConf := &navigation.Config{
-		Gamma:                gamma,
+		Gamma:                30,
 		TerminationThreshold: 1e-9,
-		TerminationWindow:    window,
-		MaxIters:             1e6,
+		TerminationWindow:    1000,
+		MaxIters:             1750,
 	}
 
 	s, err := server.New(&server.Config{
@@ -89,5 +79,5 @@ func main() {
 
 	log.Println("serving at http://localhost:8080")
 
-	log.Fatal(http.ListenAndServe(":3140", nil))
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
