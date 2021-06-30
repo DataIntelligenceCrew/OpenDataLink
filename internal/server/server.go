@@ -4,7 +4,6 @@ package server
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -16,7 +15,6 @@ import (
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/index"
 	nav "github.com/DataIntelligenceCrew/OpenDataLink/internal/navigation"
-	"github.com/DataIntelligenceCrew/OpenDataLink/internal/wordparser"
 	"github.com/ekzhu/go-fasttext"
 	"github.com/ekzhu/lshensemble"
 )
@@ -34,7 +32,6 @@ type Server struct {
 	organization         *nav.TableGraph
 	organizationConfig   *nav.Config
 	organizationGraphSVG []byte
-	parser               *wordparser.WordParser
 }
 
 // Config is used to configure the server.
@@ -47,7 +44,6 @@ type Config struct {
 	JoinabilityThreshold float64
 	JoinabilityIndex     *lshensemble.LshEnsemble
 	OrganizeConfig       *nav.Config
-	Parser               *wordparser.WordParser
 }
 
 // New creates a new Server with the given configuration.
@@ -65,7 +61,6 @@ func New(cfg *Config) (*Server, error) {
 		joinabilityThreshold: cfg.JoinabilityThreshold,
 		joinabilityIndex:     cfg.JoinabilityIndex,
 		organizationConfig:   cfg.OrganizeConfig,
-		parser:               cfg.Parser,
 	}, nil
 }
 
@@ -78,71 +73,9 @@ func (s *Server) Install() {
 	http.HandleFunc("/joinable-columns", s.handleJoinableColumns)
 	http.HandleFunc("/unionable-tables", s.handleUnionableTables)
 	http.HandleFunc("/navigation/", s.handleNav)
-	//http.HandleFunc("/navigation/get-root", s.handleNavGetRoot)
-	//http.HandleFunc("/navigation/get-word/", s.handleNavGetWord)
-	//http.HandleFunc("/navigation/get-node/", s.handleNavGetNode)
 	http.HandleFunc("/navigation-graph", s.handleNavGraph)
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
-}
-
-func enableCors(w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", "*")
-}
-
-func (s *Server) handleNavGetRoot(w http.ResponseWriter, req *http.Request) {
-	if s.organization == nil {
-		http.NotFound(w, req)
-		return
-	}
-	log.Println("Answering request to get root node")
-	enableCors(&w)
-	s.serveJson(w, *nav.ToServeableNode(s.organization, s.organization.GetRootNode()))
-}
-
-func (s *Server) handleNavGetWord(w http.ResponseWriter, req *http.Request) {
-	if s.organization == nil {
-		http.NotFound(w, req)
-		return
-	}
-	nodeID, err := strconv.ParseInt(req.URL.Path[len("/navigation/get-word/"):], 10, 64)
-
-	enableCors(&w)
-
-	if err != nil {
-		fmt.Println(err)
-		http.NotFound(w, req)
-		return
-	}
-	out, err := s.parser.Search(nav.ToDSNode(s.organization.Node(nodeID)).Vector())
-	if err != nil {
-		fmt.Println(err)
-		http.NotFound(w, req)
-	}
-	if err != nil {
-		fmt.Println(err)
-		http.NotFound(w, req)
-		return
-	}
-	s.serveJson(w, out)
-}
-
-func (s *Server) handleNavGetNode(w http.ResponseWriter, req *http.Request) {
-	if s.organization == nil {
-		http.NotFound(w, req)
-		return
-	}
-	nodeID, err := strconv.ParseInt(req.URL.Path[len("/navigation/get-node/"):], 10, 64)
-
-	enableCors(&w)
-
-	if err != nil {
-		log.Println(req.URL.Path[len("/navigation/get-node/"):])
-		http.NotFound(w, req)
-		return
-	}
-
-	s.serveJson(w, *nav.ToServeableNode(s.organization, s.organization.Node(nodeID)))
 }
 
 func (s *Server) handleNavRoot(w http.ResponseWriter, req *http.Request) {
@@ -323,13 +256,6 @@ func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request)
 func serverError(w http.ResponseWriter, err error) {
 	log.Print(err)
 	http.Error(w, err.Error(), http.StatusInternalServerError)
-}
-
-func (s *Server) serveJson(w http.ResponseWriter, data interface{}) {
-	if s.devMode {
-		json.NewEncoder(log.Writer()).Encode(data)
-	}
-	json.NewEncoder(w).Encode(data)
 }
 
 func (s *Server) servePage(w http.ResponseWriter, page string, data interface{}) {
