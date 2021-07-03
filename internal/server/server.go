@@ -78,13 +78,6 @@ func (s *Server) Install() {
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 }
 
-func (s *Server) handleNavRoot(w http.ResponseWriter, req *http.Request) {
-	s.servePage(w, "nav", &struct {
-		PageTitle string
-		Node      *nav.ServeableNode
-	}{"Navigation: Root", nav.ToServeableNode(s.organization, s.organization.GetRootNode())})
-}
-
 func (s *Server) handleNav(w http.ResponseWriter, req *http.Request) {
 	nodeID, err := strconv.ParseInt(req.URL.Path[len("/navigation/"):], 10, 64)
 	if err != nil {
