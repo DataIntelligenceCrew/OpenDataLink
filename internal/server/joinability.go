@@ -44,14 +44,21 @@ func (s *Server) joinableColumns(query *database.ColumnSketch) ([]*joinabilityRe
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Containment > results[j].Containment
 	})
+	if len(results) == 0 {
+		return results, nil
+	}
 
 	orgDatasetIDs := make([]string, 0, 50)
+	added := make(map[string]bool)
 
-	for i, res := range results {
-		if i > 50 {
+	for _, res := range results {
+		if !added[res.DatasetID] {
+			orgDatasetIDs = append(orgDatasetIDs, res.DatasetID)
+			added[res.DatasetID] = true
+		}
+		if len(orgDatasetIDs) == 50 {
 			break
 		}
-		orgDatasetIDs = append(orgDatasetIDs, res.DatasetID)
 	}
 	name, err := s.db.DatasetName(query.DatasetID)
 	if err != nil {
