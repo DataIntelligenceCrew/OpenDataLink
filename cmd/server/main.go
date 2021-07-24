@@ -5,6 +5,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/config"
@@ -73,8 +74,10 @@ func main() {
 		MaxIters:             1e6,
 	}
 
+	releaseMode := os.Getenv("MODE") == "release"
+
 	s, err := server.New(&server.Config{
-		DevMode:              true,
+		DevMode:              !releaseMode,
 		DB:                   db,
 		FastText:             ft,
 		MetadataIndex:        metadataIndex,
@@ -87,7 +90,13 @@ func main() {
 	}
 	s.Install()
 
-	log.Println("serving at http://localhost:8080")
+	port := os.Getenv("SERVERPORT")
+	if port == "" && releaseMode {
+		port = "80"
+	} else {
+		port = "8080"
+	}
+	log.Println("serving at http://localhost:" + port)
 
-	log.Fatal(http.ListenAndServe(":3140", nil))
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
