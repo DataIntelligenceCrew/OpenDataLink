@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"html/template"
@@ -112,13 +113,13 @@ func (s *Server) handleDataset(w http.ResponseWriter, req *http.Request) {
 		if err == sql.ErrNoRows {
 			http.NotFound(w, req)
 		} else {
-			serverError(w, err)
+			s.serverError(w, err)
 		}
 		return
 	}
 	cols, err := s.db.DatasetColumns(datasetID)
 	if err != nil {
-		serverError(w, err)
+		s.serverError(w, err)
 		return
 	}
 	s.servePage(w, "dataset", &struct {
@@ -137,7 +138,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, req *http.Request) {
 	s.organization = nil
 	results, err := s.keywordSearch(query)
 	if err != nil {
-		serverError(w, err)
+		s.serverError(w, err)
 		return
 	}
 	s.servePage(w, "search", &struct {
@@ -159,13 +160,13 @@ func (s *Server) handleSimilarDatasets(w http.ResponseWriter, req *http.Request)
 		if err == sql.ErrNoRows {
 			http.NotFound(w, req)
 		} else {
-			serverError(w, err)
+			s.serverError(w, err)
 		}
 		return
 	}
 	datasetName, err := s.db.DatasetName(queryID)
 	if err != nil {
-		serverError(w, err)
+		s.serverError(w, err)
 		return
 	}
 	s.servePage(w, "similar-datasets", &struct {
@@ -187,18 +188,18 @@ func (s *Server) handleJoinableColumns(w http.ResponseWriter, req *http.Request)
 		if err == sql.ErrNoRows {
 			http.NotFound(w, req)
 		} else {
-			serverError(w, err)
+			s.serverError(w, err)
 		}
 		return
 	}
 	results, err := s.joinableColumns(query)
 	if err != nil {
-		serverError(w, err)
+		s.serverError(w, err)
 		return
 	}
 	datasetName, err := s.db.DatasetName(query.DatasetID)
 	if err != nil {
-		serverError(w, err)
+		s.serverError(w, err)
 		return
 	}
 	s.servePage(w, "joinable-columns", &struct {
@@ -224,13 +225,13 @@ func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request)
 		if err == errInvalidID {
 			http.NotFound(w, req)
 		} else {
-			serverError(w, err)
+			s.serverError(w, err)
 		}
 		return
 	}
 	datasetName, err := s.db.DatasetName(queryID)
 	if err != nil {
-		serverError(w, err)
+		s.serverError(w, err)
 		return
 	}
 	s.servePage(w, "unionable-tables", &struct {
@@ -246,9 +247,13 @@ func (s *Server) handleUnionableTables(w http.ResponseWriter, req *http.Request)
 	})
 }
 
-func serverError(w http.ResponseWriter, err error) {
+func (s *Server) serverError(w http.ResponseWriter, err error) {
 	log.Print(err)
-	http.Error(w, err.Error(), http.StatusInternalServerError)
+	if s.devMode {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) servePage(w http.ResponseWriter, page string, data interface{}) {
@@ -257,20 +262,25 @@ func (s *Server) servePage(w http.ResponseWriter, page string, data interface{})
 		defer s.mux.Unlock()
 		var err error
 		if s.templates, err = parseTemplates(); err != nil {
-			serverError(w, err)
+			s.serverError(w, err)
 			return
 		}
 	}
 	tmpl := s.templates[page]
 	if tmpl == nil {
-		serverError(w, fmt.Errorf("servePage: no such page: %s", page))
+		s.serverError(w, fmt.Errorf("servePage: no such page: %s", page))
 		return
 	}
 	// Suppress clickjacking warnings
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-	// TODO: Write to a temporary buffer
-	if err := tmpl.Execute(w, data); err != nil {
-		serverError(w, err)
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		s.serverError(w, err)
+		return
+	}
+	if _, err := buf.WriteTo(w); err != nil {
+		s.serverError(w, err)
 	}
 }
 
