@@ -29,6 +29,11 @@ const (
 )
 
 func main() {
+	releaseMode := os.Getenv("MODE") == "release"
+	if releaseMode {
+		log.Println("MODE=release")
+	}
+
 	flag.Parse()
 	var gamma = DEFAULT_GAMMA
 	if *orgGamma != "" {
@@ -74,8 +79,6 @@ func main() {
 		MaxIters:             1e6,
 	}
 
-	releaseMode := os.Getenv("MODE") == "release"
-
 	s, err := server.New(&server.Config{
 		DevMode:              !releaseMode,
 		DB:                   db,
@@ -91,10 +94,12 @@ func main() {
 	s.Install()
 
 	port := os.Getenv("SERVERPORT")
-	if port == "" && releaseMode {
-		port = "80"
-	} else {
-		port = "8080"
+	if port == "" {
+		if releaseMode {
+			port = "80"
+		} else {
+			port = "8080"
+		}
 	}
 	log.Println("serving at http://localhost:" + port)
 
