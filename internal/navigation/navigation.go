@@ -6,8 +6,6 @@ import (
 	"io/ioutil"
 	"math"
 
-	//"strconv"
-
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/database"
 	"github.com/DataIntelligenceCrew/OpenDataLink/internal/vec32"
 	"github.com/DataIntelligenceCrew/go-faiss"
@@ -39,6 +37,7 @@ type Node struct {
 	datasets           map[string]bool // Set of dataset IDs of children
 	name               string
 	dataset            string
+	hasDatasetChild    bool
 }
 
 func (n *Node) Vector() []float32 { return n.vector }
@@ -57,6 +56,7 @@ func newDatasetNode(id int64, vector []float32, datasetID string) *Node {
 		name:               datasetID,
 		dataset:            datasetID,
 		datasets:           map[string]bool{datasetID: true},
+		hasDatasetChild:    false,
 	}
 }
 
@@ -73,7 +73,7 @@ func newMergedNode(id int64, a, b *Node) *Node {
 			datasets[k] = v
 		}
 	}
-	return &Node{id, 0, vec, datasets, "", ""}
+	return &Node{id, 0, vec, datasets, "", "", false}
 }
 
 // TableGraph the custom graph structure for an organization
@@ -822,15 +822,33 @@ func (n *Node) DOTID() string {
 // Attributes for the DOT encoding.
 // Implements encoding.Attributer.
 func (n *Node) Attributes() []encoding.Attribute {
-	attrs := []encoding.Attribute{{Key: "label", Value: n.name}}
-	if n.dataset != "" {
-		attrs = append(attrs, encoding.Attribute{Key: "URL", Value: "/dataset/" + n.dataset})
+	label := n.name
+	if n.hasDatasetChild {
+		label = label + "\n(view datasets)"
+	}
+	attrs := []encoding.Attribute{
+		{Key: "label", Value: label},
+		{Key: "URL", Value: fmt.Sprint("/navigation/", n.id)},
 	}
 	return attrs
 }
 
 func (O *TableGraph) MarshalDOT() ([]byte, error) {
-	return dot.Marshal(O, "Organization", "", "")
+	g := O.CopyOrganization()
+	var leafNodes []int64
+	for it := g.Nodes(); it.Next(); {
+		id := it.Node().(*Node).ID()
+		if g.From(id).Len() == 0 {
+			for jt := g.To(id); jt.Next(); {
+				jt.Node().(*Node).hasDatasetChild = true
+			}
+			leafNodes = append(leafNodes, id)
+		}
+	}
+	for _, id := range leafNodes {
+		g.RemoveNode(id)
+	}
+	return dot.Marshal(g, "Organization", "", "")
 }
 
 func (O *TableGraph) ToVisualizer(path string) {
