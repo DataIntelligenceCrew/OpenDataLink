@@ -28,13 +28,11 @@ type Config struct {
 
 const embeddingDim = 300
 
-// There are likely optimizations to be made by changing id, name, and dataset into pointers to values so that we don't have to malloc new variables each time we copy nodes
-// Node a dataset specific node
+// Node is a node in the organization graph.
 type Node struct {
 	id                 int64
 	cachedReachibility float64
-	vector             []float32       // Metadata embedding vector for the datasets
-	datasets           map[string]bool // Set of dataset IDs of children
+	vector             []float32
 	name               string
 	dataset            string
 	hasDatasetChild    bool
@@ -45,17 +43,13 @@ func (n *Node) Vector() []float32 { return n.vector }
 // ID Returns the ID of the node, in order to conform to the graph.Node interface
 func (n *Node) ID() int64 { return n.id }
 
-// Datasets returns the set of dataset IDs of the child nodes
-func (n *Node) Datasets() map[string]bool { return n.datasets }
-
 func newDatasetNode(id int64, vector []float32, datasetID string) *Node {
 	return &Node{
 		id:                 id,
-		vector:             vector,
 		cachedReachibility: 0,
-		name:               datasetID,
+		vector:             vector,
+		name:               "",
 		dataset:            datasetID,
-		datasets:           map[string]bool{datasetID: true},
 		hasDatasetChild:    false,
 	}
 }
@@ -66,14 +60,7 @@ func newMergedNode(id int64, a, b *Node) *Node {
 	vec32.Add(vec, b.vector)
 	vec32.Scale(vec, 0.5)
 	vec32.Normalize(vec)
-
-	datasets := make(map[string]bool)
-	for _, n := range []*Node{a, b} {
-		for k, v := range n.datasets {
-			datasets[k] = v
-		}
-	}
-	return &Node{id, 0, vec, datasets, "", "", false}
+	return &Node{id, 0, vec, "", "", false}
 }
 
 // TableGraph the custom graph structure for an organization
@@ -477,7 +464,6 @@ func (n *Node) copy() *Node {
 	out.cachedReachibility = n.cachedReachibility
 	out.vector = make([]float32, embeddingDim)
 	copy(out.vector, n.vector)
-	out.datasets = n.datasets
 	out.name = n.name
 	out.dataset = n.dataset
 	// fmt.Println(out.vector)
