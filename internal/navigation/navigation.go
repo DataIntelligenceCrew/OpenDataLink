@@ -751,12 +751,19 @@ func (O *TableGraph) buildPriorityQueue() []ReachabilityPriorityQueue {
 	return out
 }
 
+// Non determinism comes from the fact that the cached reachability of the nodes is not updated frequently enough, leading to the priority queue to be built in a non-deterministic fashion.
 func (O *TableGraph) organize() (*TableGraph, error) {
 	t := &terminationMonitor{make([]float64, O.config.TerminationWindow), make([]int, O.config.TerminationWindow), 0, 0}
 	// idx, err := buildIndex(O)
 	// if err != nil {
 	// 	return nil, err
 	// }
+
+	it := O.Nodes()
+
+	for it.Next() {
+		O.getStateReachabilityProbability(it.Node())
+	}
 
 	var pq []ReachabilityPriorityQueue = O.buildPriorityQueue()
 
@@ -770,6 +777,7 @@ func (O *TableGraph) organize() (*TableGraph, error) {
 				O, p = O.accept(Op)
 			}
 		}
+
 		pq = O.buildPriorityQueue()
 	}
 
