@@ -48,7 +48,7 @@ func newDatasetNode(id int64, vector []float32, datasetID string) *Node {
 		id:                 id,
 		cachedReachibility: 0,
 		vector:             vector,
-		name:               "",
+		name:               datasetID,
 		dataset:            datasetID,
 		hasDatasetChild:    false,
 	}
