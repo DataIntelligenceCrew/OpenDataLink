@@ -77,7 +77,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	s.Install()
 
 	port := os.Getenv("SERVERPORT")
 	if port == "" {
@@ -89,5 +88,5 @@ func main() {
 	}
 	log.Println("serving at http://localhost:" + port)
 
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, s.NewHandler()))
 }

@@ -1,5 +1,5 @@
-// Package server defines the Server type, which can be installed to serve the
-// Open Data Link frontend.
+// Package server defines the Server type for serving the Open Data Link
+// frontend.
 package server
 
 import (
@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,7 +21,7 @@ import (
 	"github.com/ekzhu/lshensemble"
 )
 
-// Server can be installed to serve the Open Data Link frontend.
+// Server serves the Open Data Link frontend.
 type Server struct {
 	devMode              bool
 	db                   *database.DB
@@ -65,18 +66,21 @@ func New(cfg *Config) (*Server, error) {
 	}, nil
 }
 
-// Install registers the server's HTTP handlers.
-func (s *Server) Install() {
-	http.HandleFunc("/", s.handleIndex)
-	http.HandleFunc("/dataset/", s.handleDataset)
-	http.HandleFunc("/search", s.handleSearch)
-	http.HandleFunc("/similar-datasets", s.handleSimilarDatasets)
-	http.HandleFunc("/joinable-columns", s.handleJoinableColumns)
-	http.HandleFunc("/unionable-tables", s.handleUnionableTables)
-	http.HandleFunc("/navigation/", s.handleNav)
-	http.HandleFunc("/navigation-graph", s.handleNavGraph)
+// NewHandler returns an HTTP handler that handles requests to the server.
+func (s *Server) NewHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/dataset/", s.handleDataset)
+	mux.HandleFunc("/search", s.handleSearch)
+	mux.HandleFunc("/similar-datasets", s.handleSimilarDatasets)
+	mux.HandleFunc("/joinable-columns", s.handleJoinableColumns)
+	mux.HandleFunc("/unionable-tables", s.handleUnionableTables)
+	mux.HandleFunc("/navigation/", s.handleNav)
+	mux.HandleFunc("/navigation-graph", s.handleNavGraph)
 
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
+
+	return panicRecoveryHandler(loggingHandler(mux))
 }
 
 func (s *Server) handleNav(w http.ResponseWriter, req *http.Request) {
@@ -252,7 +256,8 @@ func (s *Server) serverError(w http.ResponseWriter, err error) {
 	if s.devMode {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError),
+			http.StatusInternalServerError)
 	}
 }
 
@@ -318,4 +323,24 @@ func parseTemplates() (map[string]*template.Template, error) {
 		templates[page] = t
 	}
 	return templates, nil
+}
+
+func loggingHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		log.Printf("%s %s", req.Method, req.RequestURI)
+		next.ServeHTTP(w, req)
+	})
+}
+
+func panicRecoveryHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				http.Error(w, http.StatusText(http.StatusInternalServerError),
+					http.StatusInternalServerError)
+				log.Printf("%s\n%s", err, debug.Stack())
+			}
+		}()
+		next.ServeHTTP(w, req)
+	})
 }
